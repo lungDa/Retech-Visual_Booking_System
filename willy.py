@@ -48,11 +48,8 @@ for col, default_value in required_columns.items():
         df[col] = default_value
 
 df = df[list(required_columns.keys())]
-
-# 空資料處理
 df = df.fillna("")
 
-# 如果舊資料沒有 id，自動補 id
 changed = False
 for i in df.index:
     if str(df.at[i, "id"]).strip() == "":
@@ -68,6 +65,7 @@ if changed:
 def save_data(dataframe):
     conn.update(worksheet=WORKSHEET_NAME, data=dataframe)
 
+
 def priority_icon(priority):
     if priority == "高":
         return "🔴 高"
@@ -76,6 +74,32 @@ def priority_icon(priority):
     elif priority == "低":
         return "🟢 低"
     return "⚪ 一般"
+
+
+# ==========================================
+# CSS：置頂看板標題
+# ==========================================
+st.markdown("""
+<style>
+.sticky-board-title {
+    position: sticky;
+    top: 0;
+    z-index: 999;
+    background-color: white;
+    padding: 12px 0 8px 0;
+    border-bottom: 1px solid #ddd;
+}
+
+.sticky-board-title h3 {
+    margin: 0;
+}
+
+.task-card {
+    padding: 10px;
+    border-radius: 10px;
+}
+</style>
+""", unsafe_allow_html=True)
 
 # ==========================================
 # 上方統計
@@ -93,63 +117,6 @@ m1.metric("全部任務", total_count)
 m2.metric("待辦", todo_count)
 m3.metric("執行中", progress_count)
 m4.metric("已完成", done_count)
-
-st.write("---")
-
-# ==========================================
-# 新增任務
-# ==========================================
-st.write("### 指派新任務")
-
-with st.form("task_input_form", clear_on_submit=True):
-    c_title, c_status, c_owner = st.columns([2, 1, 1])
-
-    with c_title:
-        new_title = st.text_input("任務名稱", placeholder="輸入任務名稱...")
-
-    with c_status:
-        new_status = st.selectbox("狀態", ["To Do", "In Progress", "Done"])
-
-    with c_owner:
-        new_owner = st.text_input("負責人", placeholder="誰來負責...")
-
-    c_priority, c_due, c_note = st.columns([1, 1, 2])
-
-    with c_priority:
-        new_priority = st.selectbox("優先度", ["一般", "低", "中", "高"])
-
-    with c_due:
-        new_due_date = st.date_input("期限", value=date.today())
-
-    with c_note:
-        new_note = st.text_input("備註", placeholder="補充說明...")
-
-    submit_btn = st.form_submit_button("確認指派並同步雲端")
-
-if submit_btn:
-    if not new_title.strip():
-        st.warning("請輸入任務名稱")
-    elif not new_owner.strip():
-        st.warning("請輸入負責人")
-    else:
-        new_data = {
-            "id": f"TASK-{datetime.now().strftime('%Y%m%d%H%M%S')}",
-            "title": new_title,
-            "status": new_status,
-            "owner": new_owner,
-            "priority": new_priority,
-            "due_date": str(new_due_date),
-            "note": new_note,
-            "created_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        }
-
-        new_row = pd.DataFrame([new_data])
-        updated_df = pd.concat([df, new_row], ignore_index=True)
-
-        save_data(updated_df)
-
-        st.success("任務已成功同步寫入 Google 試算表")
-        st.rerun()
 
 st.write("---")
 
@@ -189,9 +156,12 @@ if selected_priority != "全部":
 st.write("---")
 
 # ==========================================
-# Trello 看板
+# Trello 看板：置頂區塊
 # ==========================================
-st.write("### 看板動態狀態監控")
+st.markdown(
+    '<div class="sticky-board-title"><h3>📋 看板動態狀態監控</h3></div>',
+    unsafe_allow_html=True
+)
 
 trello_col1, trello_col2, trello_col3 = st.columns(3)
 
@@ -261,3 +231,60 @@ for status_name, setting in status_map.items():
                         save_data(df)
                         st.warning("任務已刪除")
                         st.rerun()
+
+st.write("---")
+
+# ==========================================
+# 新增任務：放在看板下方
+# ==========================================
+st.write("### 指派新任務")
+
+with st.form("task_input_form", clear_on_submit=True):
+    c_title, c_status, c_owner = st.columns([2, 1, 1])
+
+    with c_title:
+        new_title = st.text_input("任務名稱", placeholder="輸入任務名稱...")
+
+    with c_status:
+        new_status = st.selectbox("狀態", ["To Do", "In Progress", "Done"])
+
+    with c_owner:
+        new_owner = st.text_input("負責人", placeholder="誰來負責...")
+
+    c_priority, c_due, c_note = st.columns([1, 1, 2])
+
+    with c_priority:
+        new_priority = st.selectbox("優先度", ["一般", "低", "中", "高"])
+
+    with c_due:
+        new_due_date = st.date_input("期限", value=date.today())
+
+    with c_note:
+        new_note = st.text_input("備註", placeholder="補充說明...")
+
+    submit_btn = st.form_submit_button("確認指派並同步雲端")
+
+if submit_btn:
+    if not new_title.strip():
+        st.warning("請輸入任務名稱")
+    elif not new_owner.strip():
+        st.warning("請輸入負責人")
+    else:
+        new_data = {
+            "id": f"TASK-{datetime.now().strftime('%Y%m%d%H%M%S')}",
+            "title": new_title,
+            "status": new_status,
+            "owner": new_owner,
+            "priority": new_priority,
+            "due_date": str(new_due_date),
+            "note": new_note,
+            "created_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        }
+
+        new_row = pd.DataFrame([new_data])
+        updated_df = pd.concat([df, new_row], ignore_index=True)
+
+        save_data(updated_df)
+
+        st.success("任務已成功同步寫入 Google 試算表")
+        st.rerun()
