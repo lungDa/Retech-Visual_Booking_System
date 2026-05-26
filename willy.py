@@ -1,147 +1,263 @@
 import streamlit as st
-
 import pandas as pd
-
 from streamlit_gsheets import GSheetsConnection
+from datetime import date, datetime
 
+# ==========================================
+# 基本設定
+# ==========================================
 st.set_page_config(layout="wide")
 
-st.title(" 階段四終極完成版：GitHub 雲端同步 Trello 看板")
-
+st.title("階段四終極完成版：GitHub 雲端同步 Trello 看板")
 st.caption("授權標註：edit by 闕河正 | 完整功能版")
 
 conn = st.connection("gsheets", type=GSheetsConnection)
 
-df = conn.read(worksheet="Tasks", ttl="0")
+WORKSHEET_NAME = "Tasks"
 
 # ==========================================
-
-#  區塊一：上方新增任務輸入表單
+# 讀取資料
+# ==========================================
+try:
+    df = conn.read(worksheet=WORKSHEET_NAME, ttl=0)
+except PermissionError:
+    st.error("Google Sheet 權限不足")
+    st.info("請到 Google Sheet 共用設定，把 Service Account Email 加入為檢視者或編輯者。")
+    st.stop()
+except Exception as e:
+    st.error("讀取 Google Sheet 失敗")
+    st.exception(e)
+    st.stop()
 
 # ==========================================
+# 自動補齊欄位
+# ==========================================
+required_columns = {
+    "id": "",
+    "title": "",
+    "status": "To Do",
+    "owner": "",
+    "priority": "一般",
+    "due_date": "",
+    "note": "",
+    "created_at": ""
+}
 
-st.write("###  指派新任務")
+for col, default_value in required_columns.items():
+    if col not in df.columns:
+        df[col] = default_value
 
-with st.form("task_input_form", clear_on_submit=True):
+df = df[list(required_columns.keys())]
 
-    c_title, c_status, c_owner = st.columns([2, 1, 1]) # 運用權重比例切分表單
+# 空資料處理
+df = df.fillna("")
 
-    with c_title:
+# 如果舊資料沒有 id，自動補 id
+changed = False
+for i in df.index:
+    if str(df.at[i, "id"]).strip() == "":
+        df.at[i, "id"] = f"TASK-{datetime.now().strftime('%Y%m%d%H%M%S')}-{i}"
+        changed = True
 
-        new_title = st.text_input(" 任務名稱", placeholder="輸入任務名稱...")
+if changed:
+    conn.update(worksheet=WORKSHEET_NAME, data=df)
 
-    with c_status:
+# ==========================================
+# 工具函式
+# ==========================================
+def save_data(dataframe):
+    conn.update(worksheet=WORKSHEET_NAME, data=dataframe)
 
-        new_status = st.selectbox(" 狀態", ["To Do", "In Progress", "Done"])
+def priority_icon(priority):
+    if priority == "高":
+        return "🔴 高"
+    elif priority == "中":
+        return "🟠 中"
+    elif priority == "低":
+        return "🟢 低"
+    return "⚪ 一般"
 
-    with c_owner:
+# ==========================================
+# 上方統計
+# ==========================================
+st.write("### 任務總覽")
 
-        new_owner = st.text_input(" 負責人", placeholder="誰來負責...")
+total_count = len(df)
+todo_count = len(df[df["status"] == "To Do"])
+progress_count = len(df[df["status"] == "In Progress"])
+done_count = len(df[df["status"] == "Done"])
 
-    
+m1, m2, m3, m4 = st.columns(4)
 
-    submit_btn = st.form_submit_button("確認指派並同步雲端")
-
-if submit_btn and new_title and new_owner:
-
-    new_data = {"title": new_title, "status": new_status, "owner": new_owner}
-
-    new_row = pd.DataFrame([new_data])
-
-    #  核心安全：新版 Python 廢棄 .append()，在雲端必須改用 pd.concat() 進行表格拼接
-
-    updated_df = pd.concat([df, new_row], ignore_index=True)
-
-    conn.update(worksheet="Tasks", data=updated_df)
-
-    st.success(" 資料已跨越限制，成功同步寫入 Google 試算表！")
-
-    st.rerun() # 強制網頁自我重整，重新讀取，讓新卡片亮起來
+m1.metric("全部任務", total_count)
+m2.metric("待辦", todo_count)
+m3.metric("執行中", progress_count)
+m4.metric("已完成", done_count)
 
 st.write("---")
 
 # ==========================================
+# 新增任務
+# ==========================================
+st.write("### 指派新任務")
 
-#  區塊二：下方 Trello 三縱欄畫布與卡片渲染
+with st.form("task_input_form", clear_on_submit=True):
+    c_title, c_status, c_owner = st.columns([2, 1, 1])
+
+    with c_title:
+        new_title = st.text_input("任務名稱", placeholder="輸入任務名稱...")
+
+    with c_status:
+        new_status = st.selectbox("狀態", ["To Do", "In Progress", "Done"])
+
+    with c_owner:
+        new_owner = st.text_input("負責人", placeholder="誰來負責...")
+
+    c_priority, c_due, c_note = st.columns([1, 1, 2])
+
+    with c_priority:
+        new_priority = st.selectbox("優先度", ["一般", "低", "中", "高"])
+
+    with c_due:
+        new_due_date = st.date_input("期限", value=date.today())
+
+    with c_note:
+        new_note = st.text_input("備註", placeholder="補充說明...")
+
+    submit_btn = st.form_submit_button("確認指派並同步雲端")
+
+if submit_btn:
+    if not new_title.strip():
+        st.warning("請輸入任務名稱")
+    elif not new_owner.strip():
+        st.warning("請輸入負責人")
+    else:
+        new_data = {
+            "id": f"TASK-{datetime.now().strftime('%Y%m%d%H%M%S')}",
+            "title": new_title,
+            "status": new_status,
+            "owner": new_owner,
+            "priority": new_priority,
+            "due_date": str(new_due_date),
+            "note": new_note,
+            "created_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        }
+
+        new_row = pd.DataFrame([new_data])
+        updated_df = pd.concat([df, new_row], ignore_index=True)
+
+        save_data(updated_df)
+
+        st.success("任務已成功同步寫入 Google 試算表")
+        st.rerun()
+
+st.write("---")
 
 # ==========================================
+# 搜尋與篩選
+# ==========================================
+st.write("### 搜尋與篩選")
 
-st.write("###  看板動態狀態監控")
+f1, f2, f3 = st.columns([2, 1, 1])
+
+with f1:
+    keyword = st.text_input("搜尋任務名稱 / 備註 / 負責人")
+
+with f2:
+    owners = ["全部"] + sorted(df["owner"].dropna().unique().tolist())
+    selected_owner = st.selectbox("負責人篩選", owners)
+
+with f3:
+    selected_priority = st.selectbox("優先度篩選", ["全部", "一般", "低", "中", "高"])
+
+filtered_df = df.copy()
+
+if keyword.strip():
+    keyword_lower = keyword.lower()
+    filtered_df = filtered_df[
+        filtered_df["title"].str.lower().str.contains(keyword_lower, na=False)
+        | filtered_df["owner"].str.lower().str.contains(keyword_lower, na=False)
+        | filtered_df["note"].str.lower().str.contains(keyword_lower, na=False)
+    ]
+
+if selected_owner != "全部":
+    filtered_df = filtered_df[filtered_df["owner"] == selected_owner]
+
+if selected_priority != "全部":
+    filtered_df = filtered_df[filtered_df["priority"] == selected_priority]
+
+st.write("---")
+
+# ==========================================
+# Trello 看板
+# ==========================================
+st.write("### 看板動態狀態監控")
 
 trello_col1, trello_col2, trello_col3 = st.columns(3)
 
-#  【第一欄：To Do】
+status_map = {
+    "To Do": {
+        "column": trello_col1,
+        "title": "🔴 To Do（待辦）",
+        "color": "red"
+    },
+    "In Progress": {
+        "column": trello_col2,
+        "title": "🟠 In Progress（執行中）",
+        "color": "orange"
+    },
+    "Done": {
+        "column": trello_col3,
+        "title": "🟢 Done（已完成）",
+        "color": "green"
+    }
+}
 
-with trello_col1:
+for status_name, setting in status_map.items():
+    with setting["column"]:
+        st.markdown(
+            f"### <span style='color:{setting['color']}'>{setting['title']}</span>",
+            unsafe_allow_html=True
+        )
 
-    st.markdown("### <span style='color:red'> To Do (待辦)</span>", unsafe_allow_html=True)
+        task_list = filtered_df[filtered_df["status"] == status_name]
 
-    todo_list = df[df["status"] == "To Do"] # 階段三學的濾網分流
+        if task_list.empty:
+            st.info("暫無任務")
+        else:
+            for idx, row in task_list.iterrows():
+                task_id = row["id"]
 
-    
+                with st.container(border=True):
+                    if row["status"] == "Done":
+                        st.markdown(f"~~**{row['title']}**~~")
+                    else:
+                        st.markdown(f"**{row['title']}**")
 
-    if not todo_list.empty:
+                    st.caption(f"負責人：{row['owner']}")
+                    st.caption(f"優先度：{priority_icon(row['priority'])}")
+                    st.caption(f"期限：{row['due_date']}")
 
-        for idx, row in todo_list.iterrows(): # 階段 3.5 學的迴圈點名
+                    if str(row["note"]).strip():
+                        st.write(f"備註：{row['note']}")
 
-            #  呼叫 border=True，幫每筆點名到的資料揉出一個精緻卡片外框
+                    new_card_status = st.selectbox(
+                        "修改狀態",
+                        ["To Do", "In Progress", "Done"],
+                        index=["To Do", "In Progress", "Done"].index(row["status"]),
+                        key=f"status_{task_id}"
+                    )
 
-            with st.container(border=True):
+                    if new_card_status != row["status"]:
+                        df.loc[df["id"] == task_id, "status"] = new_card_status
+                        save_data(df)
+                        st.success("狀態已更新")
+                        st.rerun()
 
-                st.write(f"** {row['title']}**")      # 粗體印出任務名稱
+                    delete_btn = st.button("刪除任務", key=f"delete_{task_id}")
 
-                st.caption(f"負責人: {row['owner']}")   # 灰色小字印出負責人
-
-    else:
-
-        st.info("暫無待辦任務")
-
-#  【第二欄：In Progress】
-
-with trello_col2:
-
-    st.markdown("### <span style='color:orange'> In Progress (執行中)</span>", unsafe_allow_html=True)
-
-    ip_list = df[df["status"] == "In Progress"]
-
-    
-
-    if not ip_list.empty:
-
-        for idx, row in ip_list.iterrows():
-
-            with st.container(border=True):
-
-                st.write(f"** {row['title']}**")
-
-                st.caption(f"負責人: {row['owner']}")
-
-    else:
-
-        st.info("暫無執行中任務")
-
-#  【第三欄：Done】
-
-with trello_col3:
-
-    st.markdown("### <span style='color:green'> Done (已完成)</span>", unsafe_allow_html=True)
-
-    done_list = df[df["status"] == "Done"]
-
-    
-
-    if not done_list.empty:
-
-        for idx, row in done_list.iterrows():
-
-            with st.container(border=True):
-
-                #  貼心小視覺：用 文字 幫已完成的任務加上刪除線，更有完工的體感！
-
-                st.write(f"** {row['title']}**")
-
-                st.caption(f"負責人: {row['owner']}")
-
-    else:
-
-        st.info("暫無已完成任務")
+                    if delete_btn:
+                        df = df[df["id"] != task_id]
+                        save_data(df)
+                        st.warning("任務已刪除")
+                        st.rerun()
