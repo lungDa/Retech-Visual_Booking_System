@@ -8,8 +8,8 @@ from datetime import date, datetime
 # ==========================================
 st.set_page_config(layout="wide")
 
-st.title("電力技術部：雲端同步 Trello 看板")
-st.caption("持續開發中")
+st.title("階段四終極完成版：GitHub 雲端同步 Trello 看板")
+st.caption("授權標註：edit by 闕河正 | 完整功能版")
 
 conn = st.connection("gsheets", type=GSheetsConnection)
 
@@ -111,12 +111,48 @@ todo_count = len(df[df["status"] == "To Do"])
 progress_count = len(df[df["status"] == "In Progress"])
 done_count = len(df[df["status"] == "Done"])
 
-m1, m2, m3, m4 = st.columns(4)
+if total_count > 0:
+    completion_rate = round((done_count / total_count) * 100, 1)
+else:
+    completion_rate = 0
+
+m1, m2, m3, m4, m5 = st.columns(5)
 
 m1.metric("全部任務", total_count)
 m2.metric("待辦", todo_count)
 m3.metric("執行中", progress_count)
 m4.metric("已完成", done_count)
+m5.metric("完成率", f"{completion_rate}%")
+
+st.write("### 專案完成進度")
+st.progress(completion_rate / 100)
+st.caption(f"已完成 {done_count} 項 / 共 {total_count} 項任務（{completion_rate}%）")
+
+# 完成率表格
+summary_df = pd.DataFrame([
+    {
+        "項目": "全部任務",
+        "數量": total_count,
+        "比例": "100%" if total_count > 0 else "0%"
+    },
+    {
+        "項目": "待辦",
+        "數量": todo_count,
+        "比例": f"{round((todo_count / total_count) * 100, 1)}%" if total_count > 0 else "0%"
+    },
+    {
+        "項目": "執行中",
+        "數量": progress_count,
+        "比例": f"{round((progress_count / total_count) * 100, 1)}%" if total_count > 0 else "0%"
+    },
+    {
+        "項目": "已完成",
+        "數量": done_count,
+        "比例": f"{completion_rate}%"
+    }
+])
+
+st.dataframe(summary_df, use_container_width=True, hide_index=True)
 
 st.write("---")
 
