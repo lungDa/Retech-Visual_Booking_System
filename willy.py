@@ -15,8 +15,8 @@ st.write("---")
 st.write("### 精準座標抽離實驗：")
 
 # 使用 .loc[行號, 欄位名] 精準抓取特定格子
-first_title = df.loc[1, "happy"]
-first_owner = df.loc[1, "owner"]
+first_title = df.loc[0, "happy"]
+first_owner = df.loc[0, "owner"]
 
 st.write(f"機器人回報：我們發現第 0 列（第一行任務）的名稱是：**{first_title}**")
 st.write(f"機器人回報：這一行的負責人是：**{first_owner}**")
