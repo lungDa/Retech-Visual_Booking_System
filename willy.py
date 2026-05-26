@@ -8,8 +8,8 @@ from datetime import date, datetime
 # ==========================================
 st.set_page_config(layout="wide")
 
-st.title("階段四終極完成版：GitHub 雲端同步 Trello 看板")
-st.caption("授權標註：edit by 闕河正 | 完整功能版")
+st.title("電力技術部：雲端同步 Trello 看板")
+st.caption("持續開發中")
 
 conn = st.connection("gsheets", type=GSheetsConnection)
 
