@@ -24,6 +24,6 @@ for idx, row in todo_df.iterrows():
 
     st.error(f" 迴圈巡邏：目前點名點到了第 {idx} 行的任務：") 
 
-    st.write(f" ➔ 【title 任務名稱】這一格拿到了： {row['title']}") 
+    st.write(f" ➔ 【title 任務名稱】這一格拿到了： {int(row['title'])}") 
 
     st.write(f" ➔ 【owner 負責人】這一格拿到了： {row['owner']}")
