@@ -8,6 +8,7 @@ from datetime import date, datetime
 # ==========================================
 st.set_page_config(layout="wide")
 
+st.title("豐沛環境科技股份有限公司")
 st.title("電力技術部：雲端同步 Trello 看板")
 st.caption("持續開發中")
 
