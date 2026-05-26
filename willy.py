@@ -40,7 +40,7 @@ st.write("### 1. 目前雲端資料庫的內容：")
 
 #  這裡踩過地雷：ttl="0" 代表快取時間為 0 秒，強迫它每次重新整理都必須「即時」去雲端抓最新資料，不能用舊記憶
 
-df = conn.read(worksheet="Tasks", ttl="0")
+df = conn.read(worksheet="Tasks", ttl=0)
 
 # 第 7 行：在網頁上直接把讀出來的 Pandas 表格（DataFrame）用網頁表格組件渲染出來
 
