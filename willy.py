@@ -22,7 +22,7 @@ with col1:
 
     #  內層做濾網，外層做篩選：只抓出狀態為 To Do 的小表格 
 
-    todo_df = df[df["status"] == "To Do"] # 把它印在左邊這欄 
+    todo_df = df[df["owner"] == "python"] # 把它印在左邊這欄 
     st.dataframe(todo_df)
 
 with col2: 
@@ -31,7 +31,7 @@ with col2:
 
     #  只抓出狀態為 In Progress 的小表格 
 
-    ip_df = df[df["status"] == "In Progress"] 
+    ip_df = df[df["owner"] == "java"] 
 
     st.dataframe(ip_df)
 
@@ -41,6 +41,6 @@ with col3:
 
     #  只抓出狀態為 Done 的小表格 
 
-    done_df = df[df["status"] == "Done"] 
+    done_df = df[df["owner"] == "C+"] 
 
     st.dataframe(done_df)
