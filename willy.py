@@ -9,7 +9,7 @@ from datetime import date, datetime
 st.set_page_config(layout="wide")
 
 st.title("鋒霈環境科技股份有限公司")
-st.caption("電力技術部雲端同步 Trello 看板（Tab 分頁版）")
+st.caption("電力技術部雲端同步 Trello 看板")
 
 conn = st.connection("gsheets", type=GSheetsConnection)
 
@@ -107,7 +107,7 @@ st.markdown("""
 # ==========================================
 tab1, tab2, tab3 = st.tabs([
     "📌 指派新任務",
-    "📊 任務總覽與專案完成進度",
+    "📊 任務總覽與完成進度表",
     "🔎 搜尋篩選與看板監控"
 ])
 
@@ -220,9 +220,6 @@ with tab2:
 
     st.write("### 完成率統計表")
     st.dataframe(summary_df, use_container_width=True, hide_index=True)
-
-    st.write("### 任務明細表")
-    st.dataframe(df, use_container_width=True, hide_index=True)
 
 # ==========================================
 # Tab 3：搜尋與篩選 + 看板動態狀態監控
