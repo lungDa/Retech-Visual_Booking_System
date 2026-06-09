@@ -2,4 +2,3 @@ streamlit
 st-gsheets-connection
 streamlit-autorefresh
 pandas
-streamlit.components.v1
