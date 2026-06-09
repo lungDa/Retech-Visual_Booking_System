@@ -1,98 +1,52 @@
 import streamlit as st
 import pandas as pd
 from streamlit_gsheets import GSheetsConnection
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 import calendar
 import uuid
-from datetime import date, datetime, timedelta
-# ==========================================
+
+# =========================================================
 # 基本設定
-# ==========================================
-st.set_page_config(layout="wide")
+# =========================================================
+st.set_page_config(
+    page_title="智慧資源預約系統",
+    page_icon="🏢",
+    layout="wide"
+)
 
 st.title("鋒霈環境科技股份有限公司")
 st.caption("台中分公司雲端同步智慧資源預約系統")
 
-conn = st.connection("gsheets", type=GSheetsConnection)
-
-WORKSHEET_NAME = "Tasks"
-
-# ==========================================
-# 讀取資料
-# ==========================================
-try:
-    df = conn.read(worksheet=WORKSHEET_NAME, ttl=0)
-except PermissionError:
-    st.error("Google Sheet 權限不足")
-    st.info("請到 Google Sheet 共用設定，把 Service Account Email 加入為檢視者或編輯者。")
-    st.stop()
-except Exception as e:
-    st.error("讀取 Google Sheet 失敗")
-    st.exception(e)
-    st.stop()
-
-# ==========================================
-# 自動補齊欄位
-# ==========================================
-required_columns = {
-    "id": "",
-    "title": "",
-    "status": "To Do",
-    "owner": "",
-    "priority": "一般",
-    "due_date": "",
-    "note": "",
-    "created_at": ""
-}
-
-for col, default_value in required_columns.items():
-    if col not in df.columns:
-        df[col] = default_value
-
-df = df[list(required_columns.keys())]
-df = df.fillna("")
-
-changed = False
-
-for i in df.index:
-    if str(df.at[i, "id"]).strip() == "":
-        df.at[i, "id"] = f"TASK-{datetime.now().strftime('%Y%m%d%H%M%S')}-{i}"
-        changed = True
-
-if changed:
-    conn.update(worksheet=WORKSHEET_NAME, data=df)
-
-# ==========================================
-# 工具函式
-# ==========================================
-def save_data(dataframe):
-    conn.update(worksheet=WORKSHEET_NAME, data=dataframe)
-
-
-def priority_icon(priority):
-    if priority == "高":
-        return "高"
-    elif priority == "中":
-        return "中"
-    elif priority == "低":
-        return "低"
-    return "一般"
-
+WORKSHEET_NAME = "Bookings"
 
 # =========================================================
 # 系統設定
 # =========================================================
 RESOURCE_OPTIONS = {
-    "會議室": ["第一會議室", "第二會議室", "第三會議室",],
+    "會議室": ["第一會議室", "第二會議室", "第三會議室"],
     "公務車": ["公務車A", "公務車B", "公務車C"],
 }
 
 STATUS_OPTIONS = ["閒置中", "使用中", "已預約"]
 CHECKIN_OPTIONS = ["未簽到", "已簽到"]
 
-STATUS_ICON = {"閒置中": "🟢", "使用中": "🟠", "已預約": "🔴"}
-STATUS_COLOR = {"閒置中": "#e8f8ef", "使用中": "#fff3df", "已預約": "#fdecec"}
-STATUS_BORDER = {"閒置中": "#2ecc71", "使用中": "#f39c12", "已預約": "#e74c3c"}
+STATUS_ICON = {
+    "閒置中": "🟢",
+    "使用中": "🟠",
+    "已預約": "🔴",
+}
+
+STATUS_COLOR = {
+    "閒置中": "#e8f8ef",
+    "使用中": "#fff3df",
+    "已預約": "#fdecec",
+}
+
+STATUS_BORDER = {
+    "閒置中": "#2ecc71",
+    "使用中": "#f39c12",
+    "已預約": "#e74c3c",
+}
 
 TIME_OPTIONS = [
     "08:00", "08:30", "09:00", "09:30", "10:00", "10:30",
@@ -102,9 +56,29 @@ TIME_OPTIONS = [
 ]
 
 REQUIRED_COLUMNS = [
-    "id", "resource_type", "resource_name", "booking_date", "start_time", "end_time",
-    "applicant", "status", "checkin", "purpose", "created_at", "checkin_time",
+    "id",
+    "resource_type",
+    "resource_name",
+    "booking_date",
+    "start_time",
+    "end_time",
+    "applicant",
+    "status",
+    "checkin",
+    "purpose",
+    "created_at",
+    "checkin_time",
 ]
+
+# =========================================================
+# Google Sheet 連線
+# =========================================================
+try:
+    conn = st.connection("gsheets", type=GSheetsConnection)
+except Exception as e:
+    conn = None
+    st.sidebar.error("Google Sheet 連線初始化失敗")
+    st.sidebar.exception(e)
 
 # =========================================================
 # CSS
@@ -112,7 +86,10 @@ REQUIRED_COLUMNS = [
 st.markdown(
     """
 <style>
-.block-container { padding-top: 1.5rem; }
+.block-container {
+    padding-top: 1.5rem;
+}
+
 .status-card {
     border-radius: 14px;
     padding: 16px;
@@ -120,16 +97,42 @@ st.markdown(
     border-left: 8px solid #ddd;
     box-shadow: 0 1px 4px rgba(0,0,0,0.06);
 }
-.status-title { font-size: 20px; font-weight: 700; margin-bottom: 4px; }
-.status-sub { color: #666; font-size: 14px; }
-.calendar-day, .calendar-day-muted {
-    min-height: 150px;
+
+.status-title {
+    font-size: 20px;
+    font-weight: 700;
+    margin-bottom: 4px;
+}
+
+.status-sub {
+    color: #666;
+    font-size: 14px;
+}
+
+.calendar-day,
+.calendar-day-muted {
+    min-height: 145px;
     border-radius: 12px;
     padding: 10px;
 }
-.calendar-day { border: 1px solid #e2e2e2; background: white; }
-.calendar-day-muted { border: 1px solid #f1f1f1; background: #f8f8f8; color: #aaa; }
-.calendar-date { font-weight: 700; font-size: 18px; margin-bottom: 8px; }
+
+.calendar-day {
+    border: 1px solid #e2e2e2;
+    background: white;
+}
+
+.calendar-day-muted {
+    border: 1px solid #f1f1f1;
+    background: #f8f8f8;
+    color: #aaa;
+}
+
+.calendar-date {
+    font-weight: 700;
+    font-size: 18px;
+    margin-bottom: 8px;
+}
+
 .slot-pill {
     border-radius: 999px;
     padding: 4px 8px;
@@ -142,8 +145,6 @@ st.markdown(
 """,
     unsafe_allow_html=True,
 )
-
-
 
 # =========================================================
 # 資料處理
@@ -160,10 +161,12 @@ def safe_rerun() -> None:
 
 
 def to_date_text(value) -> str:
-    if pd.isna(value) or value == "":
+    if value is None or pd.isna(value) or value == "":
         return ""
+
     if isinstance(value, datetime):
         return value.strftime("%Y-%m-%d")
+
     if isinstance(value, date):
         return value.strftime("%Y-%m-%d")
 
@@ -174,12 +177,14 @@ def to_date_text(value) -> str:
     parsed = pd.to_datetime(text, errors="coerce")
     if pd.notna(parsed):
         return parsed.strftime("%Y-%m-%d")
+
     return text[:10]
 
 
 def to_time_text(value) -> str:
-    if pd.isna(value) or value == "":
+    if value is None or pd.isna(value) or value == "":
         return ""
+
     if isinstance(value, datetime):
         return value.strftime("%H:%M")
 
@@ -187,14 +192,11 @@ def to_time_text(value) -> str:
     if not text:
         return ""
 
-    # Google Sheet 有時會讀成 09:00:00 或 1899-12-30 09:00:00
     parsed = pd.to_datetime(text, errors="coerce")
     if pd.notna(parsed):
         return parsed.strftime("%H:%M")
 
-    if len(text) >= 5:
-        return text[:5]
-    return text
+    return text[:5] if len(text) >= 5 else text
 
 
 def normalize_df(dataframe: pd.DataFrame | None) -> pd.DataFrame:
@@ -209,9 +211,10 @@ def normalize_df(dataframe: pd.DataFrame | None) -> pd.DataFrame:
 
     dataframe = dataframe[REQUIRED_COLUMNS].fillna("")
 
-    # 移除完全空白列，避免 Google Sheet 空白列造成畫面出現空預約
+    # 移除 Google Sheet 完全空白列
+    key_cols = ["resource_type", "resource_name", "booking_date", "start_time", "end_time", "applicant"]
     dataframe = dataframe[
-        dataframe[["resource_type", "resource_name", "booking_date", "start_time", "end_time"]]
+        dataframe[key_cols]
         .astype(str)
         .apply(lambda row: any(cell.strip() for cell in row), axis=1)
     ].copy()
@@ -228,11 +231,54 @@ def normalize_df(dataframe: pd.DataFrame | None) -> pd.DataFrame:
     dataframe.loc[~dataframe["checkin"].isin(CHECKIN_OPTIONS), "checkin"] = "未簽到"
 
     blank_id_mask = dataframe["id"].astype(str).str.strip() == ""
-    dataframe.loc[blank_id_mask, "id"] = [str(uuid.uuid4()) for _ in range(blank_id_mask.sum())]
+    dataframe.loc[blank_id_mask, "id"] = [str(uuid.uuid4()) for _ in range(int(blank_id_mask.sum()))]
 
     return dataframe.reset_index(drop=True)
 
-    return False
+
+def load_data() -> pd.DataFrame:
+    if conn is None:
+        st.sidebar.warning("目前使用本機空資料，尚未連線 Google Sheet")
+        return empty_booking_df()
+
+    try:
+        dataframe = conn.read(worksheet=WORKSHEET_NAME, ttl=0)
+        dataframe = normalize_df(dataframe)
+        st.sidebar.success("雲端資料讀取成功")
+        st.sidebar.caption(f"工作表：{WORKSHEET_NAME}")
+        st.sidebar.caption(f"資料筆數：{len(dataframe)}")
+        return dataframe
+
+    except PermissionError:
+        st.sidebar.error("Google Sheet 權限不足")
+        st.error("Google Sheet 權限不足，請把 Service Account Email 加入 Google Sheet 編輯者。")
+        return empty_booking_df()
+
+    except Exception as e:
+        st.sidebar.error("Google Sheet 讀取失敗")
+        st.error("讀取 Google Sheet 失敗，系統暫時以空資料啟動。")
+        st.exception(e)
+        return empty_booking_df()
+
+
+def save_data(dataframe: pd.DataFrame) -> bool:
+    if conn is None:
+        st.error("尚未連線 Google Sheet，無法同步資料。")
+        return False
+
+    try:
+        dataframe = normalize_df(dataframe)
+        conn.update(worksheet=WORKSHEET_NAME, data=dataframe)
+        return True
+
+    except PermissionError:
+        st.error("Google Sheet 權限不足，請確認 Service Account Email 已加入為編輯者。")
+        return False
+
+    except Exception as e:
+        st.error("寫入 Google Sheet 失敗")
+        st.exception(e)
+        return False
 
 
 df = load_data()
@@ -240,13 +286,16 @@ df = load_data()
 # =========================================================
 # 預約邏輯
 # =========================================================
-def parse_datetime(booking_date_text: str, time_text: str) -> datetime | None:
+def parse_booking_datetime(booking_date_value, time_value) -> datetime | None:
     try:
-        booking_date_text = to_date_text(booking_date_text)
-        time_text = to_time_text(time_text)
+        booking_date_text = to_date_text(booking_date_value)
+        time_text = to_time_text(time_value)
+
         if not booking_date_text or not time_text:
             return None
+
         return datetime.strptime(f"{booking_date_text} {time_text}", "%Y-%m-%d %H:%M")
+
     except Exception:
         return None
 
@@ -261,7 +310,8 @@ def auto_release_expired_unchecked_bookings(dataframe: pd.DataFrame) -> tuple[pd
     released_count = 0
 
     for _, row in dataframe.iterrows():
-        start_dt = parse_datetime(row["booking_date"], row["start_time"])
+        start_dt = parse_booking_datetime(row["booking_date"], row["start_time"])
+
         should_release = (
             start_dt is not None
             and row["checkin"] == "未簽到"
@@ -278,9 +328,15 @@ def auto_release_expired_unchecked_bookings(dataframe: pd.DataFrame) -> tuple[pd
     return normalize_df(result), released_count
 
 
-def has_booking_conflict(resource_type: str, resource_name: str, booking_date_value, start_time: str, end_time: str) -> bool:
-    query_start = parse_datetime(str(booking_date_value), start_time)
-    query_end = parse_datetime(str(booking_date_value), end_time)
+def has_booking_conflict(
+    resource_type: str,
+    resource_name: str,
+    booking_date_value,
+    start_time: str,
+    end_time: str,
+) -> bool:
+    query_start = parse_booking_datetime(booking_date_value, start_time)
+    query_end = parse_booking_datetime(booking_date_value, end_time)
 
     if query_start is None or query_end is None or query_start >= query_end:
         return True
@@ -292,8 +348,9 @@ def has_booking_conflict(resource_type: str, resource_name: str, booking_date_va
     ]
 
     for _, row in related.iterrows():
-        row_start = parse_datetime(row["booking_date"], row["start_time"])
-        row_end = parse_datetime(row["booking_date"], row["end_time"])
+        row_start = parse_booking_datetime(row["booking_date"], row["start_time"])
+        row_end = parse_booking_datetime(row["booking_date"], row["end_time"])
+
         if row_start and row_end and is_overlap(query_start, query_end, row_start, row_end):
             return True
 
@@ -302,14 +359,15 @@ def has_booking_conflict(resource_type: str, resource_name: str, booking_date_va
 
 def available_resources(resource_type: str, booking_date_value, start_time: str, end_time: str) -> list[str]:
     return [
-        name for name in RESOURCE_OPTIONS[resource_type]
-        if not has_booking_conflict(resource_type, name, booking_date_value, start_time, end_time)
+        resource_name
+        for resource_name in RESOURCE_OPTIONS[resource_type]
+        if not has_booking_conflict(resource_type, resource_name, booking_date_value, start_time, end_time)
     ]
 
 
 def get_resource_status(resource_type: str, resource_name: str, target_date, target_start: str, target_end: str) -> str:
-    query_start = parse_datetime(str(target_date), target_start)
-    query_end = parse_datetime(str(target_date), target_end)
+    query_start = parse_booking_datetime(target_date, target_start)
+    query_end = parse_booking_datetime(target_date, target_end)
 
     if query_start is None or query_end is None or query_start >= query_end:
         return "已預約"
@@ -324,8 +382,9 @@ def get_resource_status(resource_type: str, resource_name: str, target_date, tar
         return "閒置中"
 
     for _, row in related.iterrows():
-        row_start = parse_datetime(row["booking_date"], row["start_time"])
-        row_end = parse_datetime(row["booking_date"], row["end_time"])
+        row_start = parse_booking_datetime(row["booking_date"], row["start_time"])
+        row_end = parse_booking_datetime(row["booking_date"], row["end_time"])
+
         if row_start and row_end and is_overlap(query_start, query_end, row_start, row_end):
             return "使用中" if row["checkin"] == "已簽到" else "已預約"
 
@@ -341,33 +400,49 @@ def day_status(resource_type: str, resource_name: str, day_value: date) -> str:
 
     if day_bookings.empty:
         return "閒置中"
+
     if "使用中" in day_bookings["status"].tolist():
         return "使用中"
+
     return "已預約"
 
 
 df, released_count = auto_release_expired_unchecked_bookings(df)
-if released_count > 0:
-    if save_data(df):
-        st.warning(f"系統已自動釋出 {released_count} 筆超過 15 分鐘未簽到的預約。")
+if released_count > 0 and save_data(df):
+    st.warning(f"系統已自動釋出 {released_count} 筆超過 15 分鐘未簽到的預約。")
 
 # =========================================================
 # UI 元件
 # =========================================================
 def time_range_selector(prefix: str, default_index: int = 2) -> tuple[str, str]:
-    start_time = st.selectbox("開始時間", TIME_OPTIONS[:-1], index=default_index, key=f"{prefix}_start")
+    start_time = st.selectbox(
+        "開始時間",
+        TIME_OPTIONS[:-1],
+        index=default_index,
+        key=f"{prefix}_start",
+    )
+
     end_options = [t for t in TIME_OPTIONS if t > start_time]
-    end_time = st.selectbox("結束時間", end_options, index=0, key=f"{prefix}_end")
+
+    end_time = st.selectbox(
+        "結束時間",
+        end_options,
+        index=0,
+        key=f"{prefix}_end",
+    )
+
     return start_time, end_time
 
 
 def render_status_cards(resource_type: str, target_date, target_start: str, target_end: str) -> None:
     st.write(f"### {resource_type}狀態")
+
     resources = RESOURCE_OPTIONS[resource_type]
     cols = st.columns(min(3, len(resources)))
 
     for idx, resource_name in enumerate(resources):
         status = get_resource_status(resource_type, resource_name, target_date, target_start, target_end)
+
         with cols[idx % len(cols)]:
             st.markdown(
                 f"""
@@ -388,15 +463,31 @@ def render_booking_form(resource_type: str) -> None:
         c1, c2, c3 = st.columns([1, 1, 1])
 
         with c1:
-            booking_date_value = st.date_input("預約日期", value=date.today(), key=f"{resource_type}_date")
-            resource_name = st.selectbox(f"選擇{resource_type}", RESOURCE_OPTIONS[resource_type], key=f"{resource_type}_name")
+            booking_date_value = st.date_input(
+                "預約日期",
+                value=date.today(),
+                key=f"{resource_type}_date",
+            )
+            resource_name = st.selectbox(
+                f"選擇{resource_type}",
+                RESOURCE_OPTIONS[resource_type],
+                key=f"{resource_type}_name",
+            )
 
         with c2:
             start_time, end_time = time_range_selector(f"{resource_type}_booking")
 
         with c3:
-            applicant = st.text_input("預約人", placeholder="請輸入姓名", key=f"{resource_type}_applicant")
-            purpose = st.text_input("用途", placeholder="例：內部會議 / 外出洽公", key=f"{resource_type}_purpose")
+            applicant = st.text_input(
+                "預約人",
+                placeholder="請輸入姓名",
+                key=f"{resource_type}_applicant",
+            )
+            purpose = st.text_input(
+                "用途",
+                placeholder="例：內部會議 / 外出洽公",
+                key=f"{resource_type}_purpose",
+            )
 
         submitted = st.form_submit_button(f"確認預約{resource_type}")
 
@@ -405,10 +496,6 @@ def render_booking_form(resource_type: str) -> None:
 
     if not applicant.strip():
         st.warning("請輸入預約人")
-        return
-
-    if parse_datetime(str(booking_date_value), start_time) is None or parse_datetime(str(booking_date_value), end_time) is None:
-        st.error("日期或時間格式錯誤，請重新選擇。")
         return
 
     if has_booking_conflict(resource_type, resource_name, booking_date_value, start_time, end_time):
@@ -430,7 +517,9 @@ def render_booking_form(resource_type: str) -> None:
         "checkin_time": "",
     }
 
-    if save_data(pd.concat([df, pd.DataFrame([new_row])], ignore_index=True)):
+    updated_df = pd.concat([df, pd.DataFrame([new_row])], ignore_index=True)
+
+    if save_data(updated_df):
         st.success(f"{resource_name} 已成功預約：{booking_date_value} {start_time}~{end_time}")
         safe_rerun()
 
@@ -439,14 +528,33 @@ def render_calendar(resource_type: str) -> None:
     st.write(f"### {resource_type}月曆")
 
     today = date.today()
+
     c1, c2, c3 = st.columns([1, 1, 2])
 
     with c1:
-        year = st.number_input("年份", min_value=2024, max_value=2035, value=today.year, step=1, key=f"{resource_type}_calendar_year")
+        year = st.number_input(
+            "年份",
+            min_value=2024,
+            max_value=2035,
+            value=today.year,
+            step=1,
+            key=f"{resource_type}_calendar_year",
+        )
+
     with c2:
-        month = st.selectbox("月份", list(range(1, 13)), index=today.month - 1, key=f"{resource_type}_calendar_month")
+        month = st.selectbox(
+            "月份",
+            list(range(1, 13)),
+            index=today.month - 1,
+            key=f"{resource_type}_calendar_month",
+        )
+
     with c3:
-        selected_resource = st.selectbox(f"月曆顯示{resource_type}", RESOURCE_OPTIONS[resource_type], key=f"{resource_type}_calendar_resource")
+        selected_resource = st.selectbox(
+            f"月曆顯示{resource_type}",
+            RESOURCE_OPTIONS[resource_type],
+            key=f"{resource_type}_calendar_resource",
+        )
 
     st.caption("圖例：🟢 閒置中　🟠 使用中　🔴 已預約")
 
@@ -458,15 +566,24 @@ def render_calendar(resource_type: str) -> None:
 
     for week in month_calendar:
         cols = st.columns(7)
-        for col, day_value in zip(cols, week):
-            in_month = day_value.month == int(month)
-            css_class = "calendar-day" if in_month else "calendar-day-muted"
 
-            if not in_month:
-                col.markdown(f'<div class="{css_class}"><div class="calendar-date">{day_value.day}</div></div>', unsafe_allow_html=True)
+        for col, day_value in zip(cols, week):
+            in_current_month = day_value.month == int(month)
+            css_class = "calendar-day" if in_current_month else "calendar-day-muted"
+
+            if not in_current_month:
+                col.markdown(
+                    f"""
+                    <div class="{css_class}">
+                        <div class="calendar-date">{day_value.day}</div>
+                    </div>
+                    """,
+                    unsafe_allow_html=True,
+                )
                 continue
 
             status = day_status(resource_type, selected_resource, day_value)
+
             day_bookings = df[
                 (df["resource_type"] == resource_type)
                 & (df["resource_name"] == selected_resource)
@@ -502,6 +619,7 @@ def render_calendar(resource_type: str) -> None:
 
 def render_booking_table(resource_type: str) -> None:
     st.write(f"### {resource_type}預約紀錄 / 簽到管理")
+
     sub_df = df[df["resource_type"] == resource_type].copy()
 
     if sub_df.empty:
@@ -512,6 +630,7 @@ def render_booking_table(resource_type: str) -> None:
 
     for _, row in sub_df.iterrows():
         row_id = str(row["id"])
+
         with st.container(border=True):
             c1, c2, c3, c4 = st.columns([2, 2, 2, 2])
 
@@ -534,6 +653,7 @@ def render_booking_table(resource_type: str) -> None:
                         new_df.loc[new_df["id"] == row_id, "checkin"] = "已簽到"
                         new_df.loc[new_df["id"] == row_id, "status"] = "使用中"
                         new_df.loc[new_df["id"] == row_id, "checkin_time"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+
                         if save_data(new_df):
                             safe_rerun()
                 else:
@@ -550,12 +670,19 @@ def render_unreserved_search() -> None:
     st.write("### 未預約搜尋")
 
     c1, c2, c3 = st.columns([1, 1, 1])
+
     with c1:
         search_date = st.date_input("搜尋日期", value=date.today(), key="search_date")
+
     with c2:
         start_time, end_time = time_range_selector("search")
+
     with c3:
-        resource_filter = st.selectbox("資源類型", ["全部", "會議室", "公務車"], key="search_resource_type")
+        resource_filter = st.selectbox(
+            "資源類型",
+            ["全部", "會議室", "公務車"],
+            key="search_resource_type",
+        )
 
     st.write("---")
 
@@ -564,6 +691,7 @@ def render_unreserved_search() -> None:
             continue
 
         st.write(f"#### 可預約{resource_type}")
+
         resources = available_resources(resource_type, search_date, start_time, end_time)
 
         if not resources:
@@ -571,25 +699,36 @@ def render_unreserved_search() -> None:
             continue
 
         cols = st.columns(min(3, len(resources)))
+
         for idx, resource_name in enumerate(resources):
             with cols[idx % len(cols)]:
                 st.success(f"🟢 {resource_name}")
+
 
 
 def render_resource_page(resource_type: str) -> None:
     st.info("可任選日期與時段預約；開始後 15 分鐘未簽到會自動釋出。")
 
     q1, q2 = st.columns([1, 2])
+
     with q1:
-        status_date = st.date_input("狀態查詢日期", value=date.today(), key=f"{resource_type}_status_date")
+        status_date = st.date_input(
+            "狀態查詢日期",
+            value=date.today(),
+            key=f"{resource_type}_status_date",
+        )
+
     with q2:
         status_start, status_end = time_range_selector(f"{resource_type}_status")
 
     render_status_cards(resource_type, status_date, status_start, status_end)
+
     st.write("---")
     render_booking_form(resource_type)
+
     st.write("---")
     render_calendar(resource_type)
+
     st.write("---")
     render_booking_table(resource_type)
 
@@ -597,7 +736,11 @@ def render_resource_page(resource_type: str) -> None:
 # =========================================================
 # 主畫面
 # =========================================================
-tab1, tab2, tab3, tab4 = st.tabs(["🏢 預約辦公室", "🚗 預約公務車", "🔍 未預約搜尋"])
+tab1, tab2, tab3= st.tabs([
+    "🏢 預約辦公室",
+    "🚗 預約公務車",
+    "🔍 未預約搜尋",
+])
 
 with tab1:
     render_resource_page("會議室")
@@ -607,7 +750,3 @@ with tab2:
 
 with tab3:
     render_unreserved_search()
-
-
-    st.write("#### 目前雲端欄位")
-    st.dataframe(pd.DataFrame({"欄位名稱": REQUIRED_COLUMNS}), hide_index=True, use_container_width=True)
