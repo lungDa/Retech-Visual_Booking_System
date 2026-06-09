@@ -775,7 +775,7 @@ def render_resource_page(resource_type: str) -> None:
     with q2:
         status_start, status_end = time_range_selector(f"{resource_type}_status")
 
-    render_status_cards(resource_type, date.today(), None, None)
+    render_status_cards(resource_type, date.today(), None, None) 
 
     st.write("---")
     render_booking_form(resource_type)
