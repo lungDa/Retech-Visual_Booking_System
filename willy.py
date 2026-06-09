@@ -607,14 +607,14 @@ def render_calendar(resource_type: str) -> None:
                 )
 
             col.markdown(
-                f"""
-                <div class="{css_class}">
-                    <div class="calendar-date">{day_value.day} {STATUS_ICON[status]}</div>
-                    {booking_lines}
-                </div>
-                """,
-                unsafe_allow_html=True,
-            )
+                    f"""
+                    <div class="{css_class}">
+                        <div class="calendar-date">{day_value.day} {STATUS_ICON.get(status, '🔴')}</div>
+                        {booking_lines}
+                    </div>
+                    """,
+                    unsafe_allow_html=True,
+                )
 
 
 def render_booking_table(resource_type: str) -> None:
