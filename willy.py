@@ -48,6 +48,16 @@ RESOURCE_OPTIONS = {
 STATUS_OPTIONS = ["閒置中", "使用中", "已預約"]
 CHECKIN_OPTIONS = ["未簽到", "已簽到"]
 
+# 一般勞工不放假的國定紀念日 / 節日，允許預約
+LABOR_WORKING_HOLIDAY_KEYWORDS = [
+    "軍人節",
+    "教師節",
+    "光復節",
+    "行憲紀念日",
+    "蔣公誕辰紀念日",
+    "國父誕辰紀念日",
+]
+
 STATUS_ICON = {
     "閒置中": "🟢",
     "使用中": "🟠",
@@ -334,8 +344,12 @@ def load_taiwan_calendar() -> pd.DataFrame:
 def is_closed_day(day_value: date) -> bool:
     """
     回傳是否不開放預約。
-    若政府日曆有資料，以政府日曆為準。
-    若讀取失敗，退回六日不開放。
+
+    規則：
+    1. 若是一般勞工不放假的節日，例如軍人節，允許預約
+    2. 若政府日曆 isholiday = 是，視為休假不開放
+    3. 若政府日曆 isholiday = 否，視為上班日可預約
+    4. 若政府日曆讀不到，退回六日不開放
     """
     day_text = day_value.strftime("%Y%m%d")
     holiday_df = load_taiwan_calendar()
@@ -347,6 +361,9 @@ def is_closed_day(day_value: date) -> bool:
 
     if row.empty:
         return day_value.weekday() >= 5
+
+    if is_labor_working_holiday(day_value):
+        return False
 
     isholiday = str(row.iloc[0].get("isholiday", "")).strip()
 
@@ -375,6 +392,25 @@ def closed_day_name(day_value: date) -> str:
     description = str(row.iloc[0].get("description", "")).strip()
 
     return name or description or "休假日"
+    
+def is_labor_working_holiday(day_value: date) -> bool:
+    day_text = day_value.strftime("%Y%m%d")
+    holiday_df = load_taiwan_calendar()
+
+    if holiday_df.empty:
+        return False
+
+    row = holiday_df[holiday_df["date"].astype(str) == day_text]
+
+    if row.empty:
+        return False
+
+    text = (
+        str(row.iloc[0].get("name", "")) +
+        str(row.iloc[0].get("description", ""))
+    )
+
+    return any(keyword in text for keyword in LABOR_WORKING_HOLIDAY_KEYWORDS)    
 
 
 # =========================================================
