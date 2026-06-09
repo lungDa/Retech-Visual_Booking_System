@@ -505,7 +505,15 @@ def save_data(dataframe: pd.DataFrame) -> bool:
 
     try:
         dataframe = normalize_df(dataframe)
+
+        # 防止空資料覆蓋整張表
+        if dataframe.empty:
+            st.error("資料為空，已阻止覆蓋 Google Sheet。")
+            return False
+
+        dataframe = dataframe[REQUIRED_COLUMNS].copy()
         conn.update(worksheet=WORKSHEET_NAME, data=dataframe)
+
         return True
 
     except PermissionError:
@@ -845,7 +853,8 @@ def render_booking_form(resource_type: str) -> None:
         "checkin_time": "",
     }
 
-    updated_df = pd.concat([df, pd.DataFrame([new_row])], ignore_index=True)
+    latest_df = load_data()
+    updated_df = pd.concat([latest_df, pd.DataFrame([new_row])], ignore_index=True)
 
     if save_data(updated_df):
         st.success(f"{resource_name} 已成功預約：{booking_date_value} {start_time}~{end_time}")
