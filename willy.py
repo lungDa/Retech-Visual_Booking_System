@@ -490,24 +490,40 @@ def is_overlap(start_a: datetime, end_a: datetime, start_b: datetime, end_b: dat
 
 
 def auto_release_expired_unchecked_bookings(dataframe: pd.DataFrame) -> tuple[pd.DataFrame, int]:
+    """
+    自動釋出規則：
+    1. 未簽到：開始後 15 分鐘未簽到，自動刪除預約，恢復閒置
+    2. 已簽到/使用中：結束時間到，自動刪除預約，恢復閒置
+    """
     now = datetime.now()
     keep_rows = []
     released_count = 0
 
     for _, row in dataframe.iterrows():
         start_dt = parse_booking_datetime(row["booking_date"], row["start_time"])
+        end_dt = parse_booking_datetime(row["booking_date"], row["end_time"])
 
-        should_release = (
-            start_dt is not None
-            and row["checkin"] == "未簽到"
-            and row["status"] in ["已預約", "使用中"]
+        if start_dt is None or end_dt is None:
+            keep_rows.append(row)
+            continue
+
+        # 未簽到，開始後 15 分鐘自動釋出
+        no_checkin_expired = (
+            row["checkin"] == "未簽到"
             and now > start_dt + timedelta(minutes=15)
         )
 
-        if should_release:
+        # 已簽到或使用中，結束時間到自動釋出
+        usage_finished = (
+            row["checkin"] == "已簽到"
+            and now >= end_dt
+        )
+
+        if no_checkin_expired or usage_finished:
             released_count += 1
-        else:
-            keep_rows.append(row)
+            continue
+
+        keep_rows.append(row)
 
     result = pd.DataFrame(keep_rows) if keep_rows else empty_booking_df()
     return normalize_df(result), released_count
