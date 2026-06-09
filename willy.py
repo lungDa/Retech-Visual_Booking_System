@@ -9,7 +9,9 @@ import requests
 from io import StringIO
 import urllib3
 import time
+from datetime import timezone, timedelta
 
+TW_TZ = timezone(timedelta(hours=8))
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 # =========================================================
@@ -44,7 +46,7 @@ st.title("鋒霈環境科技股份有限公司")
 st.caption("台中分公司雲端同步智慧資源預約系統")
 
 WORKSHEET_NAME = "Tasks"
-
+datetime.now(TW_TZ)
 # =========================================================
 # 系統設定
 # =========================================================
