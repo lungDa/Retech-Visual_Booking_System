@@ -26,7 +26,7 @@ components.html(
     <script>
         setTimeout(function(){
             window.parent.location.reload();
-        }, 300*1000);
+        }, 300000);
     </script>
     """,
     height=0,
