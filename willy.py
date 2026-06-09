@@ -531,7 +531,13 @@ def parse_booking_datetime(booking_date_value, time_value) -> datetime | None:
         if not booking_date_text or not time_text:
             return None
 
-        return datetime.strptime(f"{booking_date_text} {time_text}", "%Y-%m-%d %H:%M")
+        dt = datetime.strptime(
+            f"{booking_date_text} {time_text}",
+            "%Y-%m-%d %H:%M"
+        )
+
+        # 補上台灣時區
+        return dt.replace(tzinfo=TW_TZ)
 
     except Exception:
         return None
