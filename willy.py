@@ -630,6 +630,19 @@ def render_unreserved_search():
         else:
             st.error("此時段沒有可預約公務車。")
 
+
+def render_benefits():
+    st.markdown("""
+    <div class="benefit-box">
+        <h3>期望使用效益</h3>
+        <div>✅ 減少人工預約作業</div>
+        <div>✅ 避免會議室與公務車使用衝突</div>
+        <div>✅ 提升會議室與公務車使用率</div>
+        <div>✅ 自動化管理流程，降低行政人員負擔</div>
+    </div>
+    """, unsafe_allow_html=True)
+
+
 # =========================================================
 # 主畫面 Tab
 # =========================================================
