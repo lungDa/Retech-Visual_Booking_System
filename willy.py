@@ -16,16 +16,23 @@ st.set_page_config(
 )
 
 st.title("鋒霈環境科技股份有限公司")
-st.caption("會議室 / 公務車 智慧預約管理系統")
+st.caption("會議室 / 公務車 智慧預約管理系統｜Google Sheet 雲端共用版")
 
 conn = st.connection("gsheets", type=GSheetsConnection)
 WORKSHEET_NAME = "Bookings"
 
 # =========================================================
+# 雲端共用設定
+# =========================================================
+# 使用 Google Sheet 作為共用資料庫。多人開啟同一個 Streamlit 網址時，
+# 都會讀寫同一張 Bookings 工作表。ttl=0 代表每次重新執行都讀取最新雲端資料。
+CLOUD_READ_TTL = 0
+
+# =========================================================
 # 系統設定
 # =========================================================
 RESOURCE_OPTIONS = {
-    "會議室": ["第一會議室", "第二會議室", "第三會議室",],
+    "會議室": ["第一會議室", "第二會議室", "第三會議室", "第四會議室", "第五會議室"],
     "公務車": ["公務車A", "公務車B", "公務車C"],
 }
 
@@ -84,6 +91,27 @@ st.markdown(
 """,
     unsafe_allow_html=True,
 )
+
+# =========================================================
+# 雲端共用狀態
+# =========================================================
+with st.sidebar:
+    st.header("☁️ 雲端共用")
+    st.caption("資料來源：Google Sheet / Bookings")
+    st.caption("同步方式：每次操作即時寫入雲端")
+
+    if st.button("重新讀取雲端資料"):
+        if hasattr(st, "cache_data"):
+            st.cache_data.clear()
+        if hasattr(st, "cache_resource"):
+            st.cache_resource.clear()
+        # streamlit_gsheets 主要靠 ttl=0 即時讀取，這裡重新執行頁面即可刷新。
+        if hasattr(st, "rerun"):
+            st.rerun()
+        else:
+            st.experimental_rerun()
+
+    st.info("部署到 Streamlit Cloud 後，把網址分享給同事，即可多人共用同一份預約資料。")
 
 # =========================================================
 # 資料處理
@@ -174,20 +202,37 @@ def normalize_df(dataframe: pd.DataFrame | None) -> pd.DataFrame:
 
 
 def load_data() -> pd.DataFrame:
+    """從 Google Sheet 讀取雲端共用資料。"""
     try:
-        return normalize_df(conn.read(worksheet=WORKSHEET_NAME, ttl=0))
+        dataframe = conn.read(worksheet=WORKSHEET_NAME, ttl=CLOUD_READ_TTL)
+        dataframe = normalize_df(dataframe)
+        st.sidebar.success(f"雲端已連線：{len(dataframe)} 筆資料")
+        return dataframe
+    except PermissionError:
+        st.error("Google Sheet 權限不足")
+        st.info("請到 Google Sheet 共用設定，把 Service Account Email 加入為編輯者。")
+        st.stop()
     except Exception as exc:
-        st.warning(f"讀取 Google Sheet 失敗，已先以空資料啟動。錯誤：{exc}")
-        return empty_booking_df()
+        st.error("讀取 Google Sheet 失敗")
+        st.info("請確認：1. secrets.toml 已設定；2. 試算表已共用給 Service Account；3. 已建立 Bookings 工作表。")
+        st.exception(exc)
+        st.stop()
 
 
 def save_data(dataframe: pd.DataFrame) -> bool:
+    """寫入 Google Sheet，讓所有使用者看到同一份雲端資料。"""
     try:
-        conn.update(worksheet=WORKSHEET_NAME, data=normalize_df(dataframe))
+        cleaned_df = normalize_df(dataframe)
+        conn.update(worksheet=WORKSHEET_NAME, data=cleaned_df)
+        st.sidebar.success(f"雲端已同步：{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
         return True
+    except PermissionError:
+        st.error("Google Sheet 權限不足，無法寫入。")
+        st.info("請把 Service Account Email 加入 Google Sheet 編輯者。")
+        return False
     except Exception as exc:
         st.error(f"寫入 Google Sheet 失敗：{exc}")
-        st.info("請確認 Google Sheet 內是否已有 Bookings 工作表，且欄位權限允許寫入。")
+        st.info("請確認 Google Sheet 內是否已有 Bookings 工作表，且 Service Account 具有編輯權限。")
         return False
 
 
@@ -553,7 +598,7 @@ def render_resource_page(resource_type: str) -> None:
 # =========================================================
 # 主畫面
 # =========================================================
-tab1, tab2, tab3 = st.tabs(["🏢 預約辦公室", "🚗 預約公務車", "🔍 未預約搜尋"])
+tab1, tab2, tab3, tab4 = st.tabs(["🏢 預約辦公室", "🚗 預約公務車", "🔍 未預約搜尋", "☁️ 雲端共用設定"])
 
 with tab1:
     render_resource_page("會議室")
@@ -563,3 +608,20 @@ with tab2:
 
 with tab3:
     render_unreserved_search()
+
+
+with tab4:
+    st.write("### ☁️ 雲端共用功能")
+    st.success("目前版本已使用 Google Sheet 作為雲端共用資料庫。")
+    st.write("""
+    #### 使用方式
+    1. Google Sheet 建立工作表：`Bookings`。
+    2. 第一列欄位請依序建立：
+       `id, resource_type, resource_name, booking_date, start_time, end_time, applicant, status, checkin, purpose, created_at, checkin_time`
+    3. 將 Google Sheet 共用給 Streamlit 的 Service Account Email，權限設為「編輯者」。
+    4. 部署到 Streamlit Cloud 後，分享同一個網址給同事使用。
+    5. 所有人的新增預約、簽到、取消、釋出，都會同步寫入同一張 Google Sheet。
+    """)
+
+    st.write("#### 目前雲端欄位")
+    st.dataframe(pd.DataFrame({"欄位名稱": REQUIRED_COLUMNS}), hide_index=True, use_container_width=True)
