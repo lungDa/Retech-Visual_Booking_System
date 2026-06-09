@@ -400,21 +400,43 @@ def available_resources(resource_type: str, booking_date_value, start_time: str,
     ]
 
 
-def get_resource_status(resource_type: str, resource_name: str, target_date, target_start: str, target_end: str) -> str:
-    query_start = parse_booking_datetime(target_date, target_start)
-    query_end = parse_booking_datetime(target_date, target_end)
-
-    if query_start is None or query_end is None or query_start >= query_end:
-        return "已預約"
+def get_resource_status(resource_type: str, resource_name: str, target_date=None, target_start=None, target_end=None) -> str:
+    today_text = to_date_text(date.today())
+    now = datetime.now()
 
     related = df[
         (df["resource_type"] == resource_type)
         & (df["resource_name"] == resource_name)
-        & (df["booking_date"] == to_date_text(target_date))
+        & (df["booking_date"] == today_text)
     ]
 
     if related.empty:
         return "閒置中"
+
+    for _, row in related.iterrows():
+        row_start = parse_booking_datetime(row["booking_date"], row["start_time"])
+        row_end = parse_booking_datetime(row["booking_date"], row["end_time"])
+
+        if row_start is None or row_end is None:
+            continue
+
+        # 現在時間正在預約區間內
+        if row_start <= now <= row_end:
+            if row["checkin"] == "已簽到":
+                return "使用中"
+            return "已預約"
+
+    # 今天後面還有預約
+    future_bookings = []
+    for _, row in related.iterrows():
+        row_start = parse_booking_datetime(row["booking_date"], row["start_time"])
+        if row_start and now < row_start:
+            future_bookings.append(row_start)
+
+    if future_bookings:
+        return "已預約"
+
+    return "閒置中"
 
     for _, row in related.iterrows():
         row_start = parse_booking_datetime(row["booking_date"], row["start_time"])
