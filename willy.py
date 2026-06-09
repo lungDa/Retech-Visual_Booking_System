@@ -5,7 +5,6 @@ from datetime import date, datetime, timedelta
 import calendar
 import uuid
 from streamlit_autorefresh import st_autorefresh
-import streamlit.components.v1 as components
 # =========================================================
 # 基本設定
 # =========================================================
@@ -23,17 +22,6 @@ WORKSHEET_NAME = "Tasks"
 st_autorefresh(
     interval=30 * 1000,
     key="auto_refresh"
-)
-
-components.html(
-    """
-    <script>
-        setTimeout(function(){
-            window.parent.location.reload();
-        }, 30000);
-    </script>
-    """,
-    height=0,
 )
 # =========================================================
 # 系統設定
