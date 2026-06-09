@@ -195,7 +195,15 @@ def load_taiwan_calendar() -> pd.DataFrame:
     url = "https://data.ntpc.gov.tw/api/datasets/308dcd75-6434-45bc-a95f-584da4fed251/csv?page=0&size=2000"
 
     try:
-        holiday_df = pd.read_csv(url)
+        response = requests.get(
+            url,
+            timeout=15,
+            verify=False
+        )
+
+        response.raise_for_status()
+
+        holiday_df = pd.read_csv(StringIO(response.text))
 
         holiday_df.columns = [
             str(c).strip().lower()
