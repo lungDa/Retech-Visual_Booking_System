@@ -594,6 +594,7 @@ def render_calendar(resource_type: str) -> None:
                 booking_lines = f"""
                 <div class="slot-pill" style="background:{STATUS_COLOR['閒置中']}; border-color:{STATUS_BORDER['閒置中']};">
                     🟢 全天可預約
+                </div>
                 """
             else:
                 booking_lines = "".join(
