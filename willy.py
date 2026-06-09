@@ -4,7 +4,7 @@ from streamlit_gsheets import GSheetsConnection
 from datetime import date, datetime, timedelta
 import calendar
 import uuid
-
+from streamlit_autorefresh import st_autorefresh
 # =========================================================
 # 基本設定
 # =========================================================
@@ -17,6 +17,12 @@ st.title("鋒霈環境科技股份有限公司")
 st.caption("台中分公司雲端同步智慧資源預約系統")
 
 WORKSHEET_NAME = "Tasks"
+
+# 每1秒自動刷新一次
+st_autorefresh(
+    interval=30 * 1000,
+    key="auto_refresh"
+)
 
 # =========================================================
 # 系統設定
