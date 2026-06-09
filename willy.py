@@ -8,6 +8,7 @@ import uuid
 import requests
 from io import StringIO
 import urllib3
+import time
 
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
@@ -19,6 +20,13 @@ st.set_page_config(
     page_icon="🏢",
     layout="wide"
 )
+
+if "last_auto_refresh" not in st.session_state:
+    st.session_state.last_auto_refresh = time.time()
+
+if time.time() - st.session_state.last_auto_refresh >= 30:
+    st.session_state.last_auto_refresh = time.time()
+    st.rerun()
 
 # 每 30 秒自動刷新一次，讓狀態可隨時間變化
 components.html(
@@ -550,13 +558,11 @@ def auto_release_expired_unchecked_bookings(dataframe: pd.DataFrame) -> tuple[pd
             keep_rows.append(row)
             continue
 
-        # 未簽到，開始後 15 分鐘自動釋出
         no_checkin_expired = (
             row["checkin"] == "未簽到"
             and now > start_dt + timedelta(minutes=15)
         )
 
-        # 已簽到或使用中，結束時間到自動釋出
         usage_finished = (
             row["checkin"] == "已簽到"
             and now >= end_dt
@@ -729,6 +735,18 @@ def time_range_selector(prefix: str, default_index: int = 2) -> tuple[str, str]:
 
 
 def render_status_cards(resource_type: str, target_date=None, target_start=None, target_end=None) -> None:
+    global df
+
+    # 每次顯示狀態前，先重新讀取雲端最新資料
+    df = load_data()
+
+    # 每次顯示狀態前，先自動釋出過期預約
+    df, released_count = auto_release_expired_unchecked_bookings(df)
+
+    if released_count > 0:
+        save_data(df)
+        st.warning(f"系統已自動釋出 {released_count} 筆逾時預約。")
+
     st.write(f"### {resource_type}即時狀態")
     st.caption(f"目前時間：{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
 
@@ -736,7 +754,13 @@ def render_status_cards(resource_type: str, target_date=None, target_start=None,
     cols = st.columns(min(3, len(resources)))
 
     for idx, resource_name in enumerate(resources):
-        status = get_resource_status(resource_type, resource_name, target_date, target_start, target_end)
+        status = get_resource_status(
+            resource_type,
+            resource_name,
+            target_date,
+            target_start,
+            target_end
+        )
 
         with cols[idx % len(cols)]:
             st.markdown(
