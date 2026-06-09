@@ -192,46 +192,35 @@ def to_time_text(value) -> str:
 # =========================================================
 @st.cache_data(ttl=60 * 60 * 24)
 def load_taiwan_calendar() -> pd.DataFrame:
-    urls = [
-        "https://data.ntpc.gov.tw/api/datasets/308dcd75-6434-45bc-a95f-584da4fed251/csv",
-        "https://data.gov.tw/dataset/14718/download?file_type=csv",
-    ]
+    url = "https://data.ntpc.gov.tw/api/datasets/308dcd75-6434-45bc-a95f-584da4fed251/csv?page=0&size=2000"
 
-    for url in urls:
-        try:
-            holiday_df = pd.read_csv(url)
-            original_columns = list(holiday_df.columns)
-            lowered = [str(c).strip().lower() for c in holiday_df.columns]
-            holiday_df.columns = lowered
+    try:
+        holiday_df = pd.read_csv(url)
 
-            rename_map = {}
-            for raw_col, col in zip(original_columns, lowered):
-                raw_text = str(raw_col).strip()
-                if col in ["date"] or raw_text == "日期":
-                    rename_map[col] = "date"
-                elif col in ["isholiday", "is_holiday"] or raw_text == "是否放假":
-                    rename_map[col] = "isholiday"
-                elif col in ["name"] or raw_text == "節日":
-                    rename_map[col] = "name"
-                elif col in ["description"] or raw_text in ["說明", "備註"]:
-                    rename_map[col] = "description"
+        holiday_df.columns = [
+            str(c).strip().lower()
+            for c in holiday_df.columns
+        ]
 
-            holiday_df = holiday_df.rename(columns=rename_map)
+        holiday_df["date"] = (
+            holiday_df["date"]
+            .astype(str)
+            .str.replace("-", "", regex=False)
+            .str.strip()
+        )
 
-            if "date" not in holiday_df.columns:
-                continue
+        holiday_df["isholiday"] = (
+            holiday_df["isholiday"]
+            .astype(str)
+            .str.strip()
+        )
 
-            holiday_df["date"] = holiday_df["date"].astype(str).str.replace("-", "", regex=False).str.strip()
+        return holiday_df
 
-            for col in ["isholiday", "name", "description"]:
-                if col not in holiday_df.columns:
-                    holiday_df[col] = ""
-
-            return holiday_df[["date", "isholiday", "name", "description"]]
-        except Exception:
-            continue
-
-    return pd.DataFrame(columns=["date", "isholiday", "name", "description"])
+    except Exception as e:
+        st.sidebar.error("國定假日資料讀取失敗")
+        st.sidebar.exception(e)
+        return pd.DataFrame()
 
 
 def is_closed_day(day_value: date) -> bool:
@@ -241,19 +230,14 @@ def is_closed_day(day_value: date) -> bool:
     if holiday_df.empty:
         return day_value.weekday() >= 5
 
-    row = holiday_df[holiday_df["date"].astype(str) == day_text]
+    row = holiday_df[
+        holiday_df["date"].astype(str) == day_text
+    ]
 
     if row.empty:
         return day_value.weekday() >= 5
 
-    value = str(row.iloc[0].get("isholiday", "")).strip().lower()
-
-    if value in ["是", "1", "true", "yes", "y"]:
-        return True
-    if value in ["否", "0", "false", "no", "n"]:
-        return False
-
-    return day_value.weekday() >= 5
+    return str(row.iloc[0]["isholiday"]).strip() == "是"
 
 
 def closed_day_name(day_value: date) -> str:
@@ -263,13 +247,16 @@ def closed_day_name(day_value: date) -> str:
     if holiday_df.empty:
         return "六日不開放" if day_value.weekday() >= 5 else ""
 
-    row = holiday_df[holiday_df["date"].astype(str) == day_text]
+    row = holiday_df[
+        holiday_df["date"].astype(str) == day_text
+    ]
 
     if row.empty:
         return "六日不開放" if day_value.weekday() >= 5 else ""
 
     name = str(row.iloc[0].get("name", "")).strip()
     description = str(row.iloc[0].get("description", "")).strip()
+
     return name or description or "休假日"
 
 
