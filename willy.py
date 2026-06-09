@@ -48,6 +48,36 @@ STATUS_BORDER = {
     "已預約": "#e74c3c",
 }
 
+
+def clean_text(value) -> str:
+    """將 Google Sheet 讀回來的空值、前後空白、隱藏換行整理成乾淨文字。"""
+    if value is None or pd.isna(value):
+        return ""
+    return str(value).replace("\n", "").replace("\r", "").strip()
+
+
+def normalize_status(value) -> str:
+    """避免 Sheet 狀態欄出現空白、舊值或異常值時，日曆 KeyError。"""
+    status = clean_text(value)
+    return status if status in STATUS_OPTIONS else "已預約"
+
+
+def normalize_checkin(value) -> str:
+    checkin = clean_text(value)
+    return checkin if checkin in CHECKIN_OPTIONS else "未簽到"
+
+
+def status_icon(status) -> str:
+    return STATUS_ICON.get(normalize_status(status), STATUS_ICON["已預約"])
+
+
+def status_color(status) -> str:
+    return STATUS_COLOR.get(normalize_status(status), STATUS_COLOR["已預約"])
+
+
+def status_border(status) -> str:
+    return STATUS_BORDER.get(normalize_status(status), STATUS_BORDER["已預約"])
+
 TIME_OPTIONS = [
     "08:00", "08:30", "09:00", "09:30", "10:00", "10:30",
     "11:00", "11:30", "12:00", "12:30", "13:00", "13:30",
@@ -170,7 +200,7 @@ def to_date_text(value) -> str:
     if isinstance(value, date):
         return value.strftime("%Y-%m-%d")
 
-    text = str(value).strip()
+    text = clean_text(value)
     if not text:
         return ""
 
@@ -188,7 +218,7 @@ def to_time_text(value) -> str:
     if isinstance(value, datetime):
         return value.strftime("%H:%M")
 
-    text = str(value).strip()
+    text = clean_text(value)
     if not text:
         return ""
 
@@ -211,6 +241,10 @@ def normalize_df(dataframe: pd.DataFrame | None) -> pd.DataFrame:
 
     dataframe = dataframe[REQUIRED_COLUMNS].fillna("")
 
+    # 所有欄位先轉成乾淨文字，避免 Google Sheet 儲存格有空白或換行造成日曆錯誤
+    for col in REQUIRED_COLUMNS:
+        dataframe[col] = dataframe[col].apply(clean_text)
+
     # 移除 Google Sheet 完全空白列
     key_cols = ["resource_type", "resource_name", "booking_date", "start_time", "end_time", "applicant"]
     dataframe = dataframe[
@@ -226,9 +260,11 @@ def normalize_df(dataframe: pd.DataFrame | None) -> pd.DataFrame:
     dataframe["start_time"] = dataframe["start_time"].apply(to_time_text)
     dataframe["end_time"] = dataframe["end_time"].apply(to_time_text)
 
+    dataframe["resource_type"] = dataframe["resource_type"].apply(clean_text)
+    dataframe["resource_name"] = dataframe["resource_name"].apply(clean_text)
     dataframe.loc[~dataframe["resource_type"].isin(RESOURCE_OPTIONS.keys()), "resource_type"] = ""
-    dataframe.loc[~dataframe["status"].isin(STATUS_OPTIONS), "status"] = "已預約"
-    dataframe.loc[~dataframe["checkin"].isin(CHECKIN_OPTIONS), "checkin"] = "未簽到"
+    dataframe["status"] = dataframe["status"].apply(normalize_status)
+    dataframe["checkin"] = dataframe["checkin"].apply(normalize_checkin)
 
     blank_id_mask = dataframe["id"].astype(str).str.strip() == ""
     dataframe.loc[blank_id_mask, "id"] = [str(uuid.uuid4()) for _ in range(int(blank_id_mask.sum()))]
@@ -446,9 +482,9 @@ def render_status_cards(resource_type: str, target_date, target_start: str, targ
         with cols[idx % len(cols)]:
             st.markdown(
                 f"""
-                <div class="status-card" style="background:{STATUS_COLOR[status]}; border-left-color:{STATUS_BORDER[status]};">
+                <div class="status-card" style="background:{status_color(status)}; border-left-color:{status_border(status)};">
                     <div class="status-title">{resource_name}</div>
-                    <div style="font-size:24px; font-weight:700;">{STATUS_ICON[status]} {status}</div>
+                    <div style="font-size:24px; font-weight:700;">{status_icon(status)} {normalize_status(status)}</div>
                     <div class="status-sub">{to_date_text(target_date)}　{target_start}~{target_end}</div>
                 </div>
                 """,
@@ -597,24 +633,36 @@ def render_calendar(resource_type: str) -> None:
                 </div>
                 """
             else:
-                booking_lines = "".join(
-                    f"""
-                    <div class="slot-pill" style="background:{STATUS_COLOR.get(row['status'], STATUS_COLOR['已預約'])}; border-color:{STATUS_BORDER.get(row['status'], STATUS_BORDER['已預約'])};">
-                        {STATUS_ICON.get(row['status'], '🔴')} {row['start_time']}-{row['end_time']}
+                booking_lines = ""
+                for _, row in day_bookings.iterrows():
+                    row_status = normalize_status(row.get("status", "已預約"))
+                    row_start = to_time_text(row.get("start_time", ""))
+                    row_end = to_time_text(row.get("end_time", ""))
+                    if not row_start or not row_end:
+                        continue
+                    booking_lines += f"""
+                    <div class="slot-pill" style="background:{status_color(row_status)}; border-color:{status_border(row_status)};">
+                        {status_icon(row_status)} {row_start}-{row_end}
                     </div><br>
                     """
-                    for _, row in day_bookings.iterrows()
-                )
 
-            col.markdown(
-                    f"""
-                    <div class="{css_class}">
-                        <div class="calendar-date">{day_value.day} {STATUS_ICON.get(status, '🔴')}</div>
-                        {booking_lines}
+                if not booking_lines:
+                    booking_lines = f"""
+                    <div class="slot-pill" style="background:{STATUS_COLOR['閒置中']}; border-color:{STATUS_BORDER['閒置中']};">
+                        🟢 全天可預約
                     </div>
-                    """,
-                    unsafe_allow_html=True,
-                )
+                    """
+
+            safe_day_status = normalize_status(status)
+            col.markdown(
+                f"""
+                <div class="{css_class}">
+                    <div class="calendar-date">{day_value.day} {status_icon(safe_day_status)}</div>
+                    {booking_lines}
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
 
 
 def render_booking_table(resource_type: str) -> None:
@@ -643,11 +691,13 @@ def render_booking_table(resource_type: str) -> None:
                 st.write(f"用途：{row['purpose'] if row['purpose'] else '未填寫'}")
 
             with c3:
-                st.write(f"狀態：{STATUS_ICON.get(row['status'], '')} {row['status']}")
-                st.write(f"簽到：{row['checkin']}")
+                row_status = normalize_status(row["status"])
+                row_checkin = normalize_checkin(row["checkin"])
+                st.write(f"狀態：{status_icon(row_status)} {row_status}")
+                st.write(f"簽到：{row_checkin}")
 
             with c4:
-                if row["checkin"] == "未簽到":
+                if normalize_checkin(row["checkin"]) == "未簽到":
                     if st.button("簽到並開始使用", key=f"checkin_{row_id}"):
                         new_df = df.copy()
                         new_df.loc[new_df["id"] == row_id, "checkin"] = "已簽到"
