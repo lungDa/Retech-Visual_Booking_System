@@ -376,7 +376,7 @@ def is_closed_day(day_value: date) -> bool:
     return day_value.weekday() >= 5
 
 
-def day_label(day_value):
+def closed_day_name(day_value):
     day_text = day_value.strftime("%Y%m%d")
     holiday_df = load_taiwan_calendar()
 
