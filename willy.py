@@ -29,7 +29,7 @@ if time.time() - st.session_state.last_auto_refresh >= 30:
     st.session_state.last_auto_refresh = time.time()
     st.rerun()
 
-# 每 30 秒自動刷新一次，讓狀態可隨時間變化
+# 每 300 秒自動刷新一次，讓狀態可隨時間變化
 components.html(
     """
     <script>
