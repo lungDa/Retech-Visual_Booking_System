@@ -69,8 +69,11 @@ LABOR_WORKING_HOLIDAY_KEYWORDS = [
 
 STATUS_ICON = {
     "閒置中": "🟢",
+    "部分預約": "🟠",
+    "已滿": "🔴",
     "使用中": "🟠",
     "已預約": "🔴",
+    "休假": "🚫",
 }
 
 STATUS_COLOR = {
@@ -707,8 +710,9 @@ def get_resource_status(resource_type: str, resource_name: str, target_date=None
 
 
 def day_status(resource_type: str, resource_name: str, day_value: date) -> str:
+
     if is_closed_day(day_value):
-        return "已預約"
+        return "休假"
 
     day_bookings = df[
         (df["resource_type"] == resource_type)
@@ -719,10 +723,36 @@ def day_status(resource_type: str, resource_name: str, day_value: date) -> str:
     if day_bookings.empty:
         return "閒置中"
 
-    if "使用中" in day_bookings["status"].tolist():
-        return "使用中"
+    # ==================================================
+    # 計算當日已被預約總分鐘數
+    # ==================================================
 
-    return "已預約"
+    total_minutes = 0
+
+    for _, row in day_bookings.iterrows():
+
+        start_dt = parse_booking_datetime(
+            row["booking_date"],
+            row["start_time"]
+        )
+
+        end_dt = parse_booking_datetime(
+            row["booking_date"],
+            row["end_time"]
+        )
+
+        if start_dt and end_dt:
+            total_minutes += int(
+                (end_dt - start_dt).total_seconds() / 60
+            )
+
+    # 08:00 ~ 18:00 = 10 小時 = 600 分鐘
+    FULL_DAY_MINUTES = 600
+
+    if total_minutes >= FULL_DAY_MINUTES:
+        return "已滿"
+
+    return "部分預約"
 
 
 df, released_count = auto_release_expired_unchecked_bookings(df)
