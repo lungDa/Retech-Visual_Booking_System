@@ -376,22 +376,29 @@ def is_closed_day(day_value: date) -> bool:
     return day_value.weekday() >= 5
 
 
-def closed_day_name(day_value: date) -> str:
+def day_label(day_value):
     day_text = day_value.strftime("%Y%m%d")
     holiday_df = load_taiwan_calendar()
 
     if holiday_df.empty:
-        return "六日不開放" if day_value.weekday() >= 5 else ""
+        return ""
 
-    row = holiday_df[holiday_df["date"].astype(str) == day_text]
+    row = holiday_df[
+        holiday_df["date"].astype(str) == day_text
+    ]
 
     if row.empty:
-        return "六日不開放" if day_value.weekday() >= 5 else ""
+        return ""
 
-    name = str(row.iloc[0].get("name", "")).strip()
-    description = str(row.iloc[0].get("description", "")).strip()
+    name = str(row.iloc[0]["name"])
 
-    return name or description or "休假日"
+    if is_labor_working_holiday(day_value):
+        return f"🟢 {name}"
+
+    if str(row.iloc[0]["isholiday"]) == "否":
+        return f"🟦 {name}"
+
+    return f"🚫 {name}"
     
 def is_labor_working_holiday(day_value: date) -> bool:
     day_text = day_value.strftime("%Y%m%d")
