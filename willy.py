@@ -13,7 +13,6 @@ st.set_page_config(
     page_icon="🏢",
     layout="wide"
 )
-
 st.title("鋒霈環境科技股份有限公司")
 st.caption("台中分公司雲端同步智慧資源預約系統")
 
@@ -564,38 +563,20 @@ def render_calendar(resource_type: str) -> None:
     st.write(f"### {resource_type}月曆")
 
     today = date.today()
-
     c1, c2, c3 = st.columns([1, 1, 2])
 
     with c1:
-        year = st.number_input(
-            "年份",
-            min_value=2024,
-            max_value=2035,
-            value=today.year,
-            step=1,
-            key=f"{resource_type}_calendar_year",
-        )
+        year = st.number_input("年份", min_value=2024, max_value=2035, value=today.year, step=1, key=f"{resource_type}_calendar_year")
 
     with c2:
-        month = st.selectbox(
-            "月份",
-            list(range(1, 13)),
-            index=today.month - 1,
-            key=f"{resource_type}_calendar_month",
-        )
+        month = st.selectbox("月份", list(range(1, 13)), index=today.month - 1, key=f"{resource_type}_calendar_month")
 
     with c3:
-        selected_resource = st.selectbox(
-            f"月曆顯示{resource_type}",
-            RESOURCE_OPTIONS[resource_type],
-            key=f"{resource_type}_calendar_resource",
-        )
+        selected_resource = st.selectbox(f"月曆顯示{resource_type}", RESOURCE_OPTIONS[resource_type], key=f"{resource_type}_calendar_resource")
 
     st.caption("圖例：🟢 閒置中　🟠 使用中　🔴 已預約")
 
-    weekday_cols = st.columns(7)
-    for col, name in zip(weekday_cols, ["日", "一", "二", "三", "四", "五", "六"]):
+    for col, name in zip(st.columns(7), ["日", "一", "二", "三", "四", "五", "六"]):
         col.markdown(f"**{name}**")
 
     month_calendar = calendar.Calendar(firstweekday=6).monthdatescalendar(int(year), int(month))
@@ -609,16 +590,12 @@ def render_calendar(resource_type: str) -> None:
 
             if not in_current_month:
                 col.markdown(
-                    f"""
-                    <div class="{css_class}">
-                        <div class="calendar-date">{day_value.day}</div>
-                    </div>
-                    """,
+                    f'<div class="{css_class}"><div class="calendar-date">{day_value.day}</div></div>',
                     unsafe_allow_html=True,
                 )
                 continue
 
-            status = day_status(resource_type, selected_resource, day_value)
+            status = normalize_status(day_status(resource_type, selected_resource, day_value))
 
             day_bookings = df[
                 (df["resource_type"] == resource_type)
@@ -626,44 +603,43 @@ def render_calendar(resource_type: str) -> None:
                 & (df["booking_date"] == to_date_text(day_value))
             ].sort_values(["start_time"])
 
+            booking_lines = ""
+
             if day_bookings.empty:
-                booking_lines = f"""
-                <div class="slot-pill" style="background:{STATUS_COLOR['閒置中']}; border-color:{STATUS_BORDER['閒置中']};">
-                    🟢 全天可預約
-                </div>
-                """
+                booking_lines = (
+                    f'<div class="slot-pill" '
+                    f'style="background:{STATUS_COLOR["閒置中"]}; border-color:{STATUS_BORDER["閒置中"]};">'
+                    f'🟢 全天可預約</div>'
+                )
             else:
-                booking_lines = ""
                 for _, row in day_bookings.iterrows():
                     row_status = normalize_status(row.get("status", "已預約"))
                     row_start = to_time_text(row.get("start_time", ""))
                     row_end = to_time_text(row.get("end_time", ""))
+
                     if not row_start or not row_end:
                         continue
-                    booking_lines += f"""
-                    <div class="slot-pill" style="background:{status_color(row_status)}; border-color:{status_border(row_status)};">
-                        {status_icon(row_status)} {row_start}-{row_end}
-                    </div><br>
-                    """
+
+                    booking_lines += (
+                        f'<div class="slot-pill" '
+                        f'style="background:{status_color(row_status)}; border-color:{status_border(row_status)};">'
+                        f'{status_icon(row_status)} {row_start}-{row_end}</div><br>'
+                    )
 
                 if not booking_lines:
-                    booking_lines = f"""
-                    <div class="slot-pill" style="background:{STATUS_COLOR['閒置中']}; border-color:{STATUS_BORDER['閒置中']};">
-                        🟢 全天可預約
-                    </div>
-                    """
+                    booking_lines = (
+                        f'<div class="slot-pill" '
+                        f'style="background:{STATUS_COLOR["閒置中"]}; border-color:{STATUS_BORDER["閒置中"]};">'
+                        f'🟢 全天可預約</div>'
+                    )
 
-            safe_day_status = normalize_status(status)
             col.markdown(
-                f"""
-                <div class="{css_class}">
-                    <div class="calendar-date">{day_value.day} {status_icon(safe_day_status)}</div>
-                    {booking_lines}
-                </div>
-                """,
+                f'<div class="{css_class}">'
+                f'<div class="calendar-date">{day_value.day} {status_icon(status)}</div>'
+                f'{booking_lines}'
+                f'</div>',
                 unsafe_allow_html=True,
             )
-
 
 def render_booking_table(resource_type: str) -> None:
     st.write(f"### {resource_type}預約紀錄 / 簽到管理")
