@@ -17,7 +17,7 @@ st.set_page_config(
 st.title("鋒霈環境科技股份有限公司")
 st.caption("台中分公司雲端同步智慧資源預約系統")
 
-WORKSHEET_NAME = "Bookings"
+WORKSHEET_NAME = "Tasks"
 
 # =========================================================
 # 系統設定
@@ -245,7 +245,7 @@ def load_data() -> pd.DataFrame:
         dataframe = conn.read(worksheet=WORKSHEET_NAME, ttl=0)
         dataframe = normalize_df(dataframe)
         st.sidebar.success("雲端資料讀取成功")
-        st.sidebar.caption(f"工作表：{WORKSHEET_NAME}")
+        st.sidebar.caption(f"雲端工作表：{WORKSHEET_NAME}")
         st.sidebar.caption(f"資料筆數：{len(dataframe)}")
         return dataframe
 
@@ -736,7 +736,7 @@ def render_resource_page(resource_type: str) -> None:
 # =========================================================
 # 主畫面
 # =========================================================
-tab1, tab2, tab3= st.tabs([
+tab1, tab2, tab3 = st.tabs([
     "🏢 預約辦公室",
     "🚗 預約公務車",
     "🔍 未預約搜尋",
