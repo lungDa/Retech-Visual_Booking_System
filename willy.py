@@ -9,7 +9,7 @@ from datetime import date, datetime, time, timedelta
 st.set_page_config(layout="wide")
 
 st.title("鋒霈環境科技股份有限公司")
-st.caption("台中分公司雲端同步｜辦公室 / 會議室 / 公務車預約系統")
+st.caption("台中分公司雲端同步｜會議室 / 公務車預約系統")
 
 conn = st.connection("gsheets", type=GSheetsConnection)
 
