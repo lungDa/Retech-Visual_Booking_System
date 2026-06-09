@@ -148,9 +148,12 @@ st.markdown(
 
 .calendar-day,
 .calendar-day-muted {
-    min-height: 145px;
+    height: 145px;
+    max-height: 145px;
+    overflow-y: auto;
     border-radius: 12px;
     padding: 10px;
+    box-sizing: border-box;
 }
 
 .calendar-day {
