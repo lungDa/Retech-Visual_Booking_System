@@ -2,18 +2,17 @@ import streamlit as st
 import streamlit.components.v1 as components
 import pandas as pd
 from streamlit_gsheets import GSheetsConnection
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 import calendar
 import uuid
 import requests
 from io import StringIO
 import urllib3
 import time
-from datetime import timezone, timedelta
 
-TW_TZ = timezone(timedelta(hours=8))
+
 urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
-
+TW_TZ = timezone(timedelta(hours=8))
 # =========================================================
 # 基本設定
 # =========================================================
@@ -46,7 +45,7 @@ st.title("鋒霈環境科技股份有限公司")
 st.caption("台中分公司雲端同步智慧資源預約系統")
 
 WORKSHEET_NAME = "Tasks"
-datetime.now(TW_TZ)
+
 # =========================================================
 # 系統設定
 # =========================================================
@@ -548,7 +547,7 @@ def auto_release_expired_unchecked_bookings(dataframe: pd.DataFrame) -> tuple[pd
     1. 未簽到：開始後 15 分鐘未簽到，自動刪除預約，恢復閒置
     2. 已簽到/使用中：結束時間到，自動刪除預約，恢復閒置
     """
-    now = datetime.now()
+    now = datetime.now(TW_TZ)
     keep_rows = []
     released_count = 0
 
@@ -637,7 +636,7 @@ def get_resource_status(resource_type: str, resource_name: str, target_date=None
     """
     若 target_start / target_end 為 None，代表依現在時間判斷狀態。
     """
-    now = datetime.now()
+    now = datetime.now(TW_TZ)
     today_text = to_date_text(date.today())
 
     # 依現在時間判斷
@@ -750,7 +749,7 @@ def render_status_cards(resource_type: str, target_date=None, target_start=None,
         st.warning(f"系統已自動釋出 {released_count} 筆逾時預約。")
 
     st.write(f"### {resource_type}即時狀態")
-    st.caption(f"目前時間：{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    st.caption(f"目前時間：{datetime.now(TW_TZ).strftime('%Y-%m-%d %H:%M:%S')}")
 
     resources = RESOURCE_OPTIONS[resource_type]
     cols = st.columns(min(3, len(resources)))
@@ -836,7 +835,7 @@ def render_booking_form(resource_type: str) -> None:
         "status": "已預約",
         "checkin": "未簽到",
         "purpose": purpose.strip(),
-        "created_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        "created_at": datetime.now(TW_TZ).strftime("%Y-%m-%d %H:%M:%S"),
         "checkin_time": "",
     }
 
@@ -993,7 +992,7 @@ def render_booking_table(resource_type: str) -> None:
                         new_df = df.copy()
                         new_df.loc[new_df["id"] == row_id, "checkin"] = "已簽到"
                         new_df.loc[new_df["id"] == row_id, "status"] = "使用中"
-                        new_df.loc[new_df["id"] == row_id, "checkin_time"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                        new_df.loc[new_df["id"] == row_id, "checkin_time"] = datetime.now(TW_TZ).strftime("%Y-%m-%d %H:%M:%S")
 
                         if save_data(new_df):
                             safe_rerun()
@@ -1069,7 +1068,7 @@ def render_resource_page(resource_type: str) -> None:
 # 側邊欄
 # =========================================================
 st.sidebar.write("### 系統狀態")
-st.sidebar.write(f"目前時間：{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+st.sidebar.write(f"目前時間：{datetime.now(TW_TZ).strftime('%Y-%m-%d %H:%M:%S')}")
 
 holiday_df = load_taiwan_calendar()
 st.sidebar.caption(f"國定假日資料筆數：{len(holiday_df)}")
