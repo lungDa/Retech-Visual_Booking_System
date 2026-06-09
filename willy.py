@@ -54,7 +54,14 @@ RESOURCE_OPTIONS = {
     "公務車": ["公務車A", "公務車B", "公務車C"],
 }
 
-STATUS_OPTIONS = ["閒置中", "使用中", "已預約"]
+STATUS_OPTIONS = [
+    "閒置中",
+    "部分預約",
+    "已滿",
+    "使用中",
+    "已預約",
+    "休假",
+]
 CHECKIN_OPTIONS = ["未簽到", "已簽到"]
 
 # 一般勞工不放假的國定紀念日 / 節日，允許預約
@@ -216,8 +223,11 @@ def safe_rerun() -> None:
 
 def normalize_status(value) -> str:
     text = str(value).strip() if value is not None else ""
-    return text if text in STATUS_OPTIONS else "已預約"
 
+    if text in STATUS_OPTIONS:
+        return text
+
+    return "已預約"
 
 def status_icon(status: str) -> str:
     return STATUS_ICON.get(normalize_status(status), "🔴")
