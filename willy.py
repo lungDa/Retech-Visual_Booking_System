@@ -8,8 +8,7 @@ from datetime import date, datetime, timedelta
 # ==========================================
 # 基本設定
 # ==========================================
-st.set_page_config(page_title="智慧資源預約系統",
-    page_icon="🏢",layout="wide")
+st.set_page_config(layout="wide")
 
 st.title("鋒霈環境科技股份有限公司")
 st.caption("台中分公司雲端同步智慧資源預約系統")
