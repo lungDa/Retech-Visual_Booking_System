@@ -930,7 +930,7 @@ def render_calendar(resource_type: str) -> None:
 
     with c3:
         selected_resource = st.selectbox(
-            f"月曆顯示{resource_type}",
+            f"選擇{resource_type}",
             RESOURCE_OPTIONS[resource_type],
             key=f"{resource_type}_calendar_resource",
         )
