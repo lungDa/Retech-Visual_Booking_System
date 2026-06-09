@@ -1,6 +1,4 @@
 streamlit
-st-gsheets-connection
-streamlit-autorefresh
 pandas
-import urllib3
-urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+st-gsheets-connection
+requests
