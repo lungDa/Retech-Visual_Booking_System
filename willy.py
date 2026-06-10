@@ -158,8 +158,8 @@ st.markdown(
 
 .calendar-day,
 .calendar-day-muted {
-    height: 145px;
-    max-height: 145px;
+    height: 180px;
+    max-height: 180px;
     overflow-y: auto;
     border-radius: 12px;
     padding: 10px;
@@ -1175,19 +1175,27 @@ def render_calendar(resource_type: str) -> None:
                     f'🟢 全天可預約</div>'
                 )
             else:
-                for _, row in day_bookings.iterrows():
-                    row_status = normalize_status(row.get("status", "已預約"))
-                    row_start = to_time_text(row.get("start_time", ""))
-                    row_end = to_time_text(row.get("end_time", ""))
+                booking_lines = ""
 
-                    if not row_start or not row_end:
-                        continue
-
-                    booking_lines += (
-                        f'<div class="slot-pill" '
-                        f'style="background:{status_color(row_status)}; border-color:{status_border(row_status)};">'
-                        f'{status_icon(row_status)} {row_start}-{row_end}</div><br>'
-                    )
+            for _, row in day_bookings.iterrows():
+                row_status = normalize_status(row.get("status", "已預約"))
+                row_start = to_time_text(row.get("start_time", ""))
+                row_end = to_time_text(row.get("end_time", ""))
+                applicant = str(row.get("applicant", "")).strip()
+            
+                if not row_start or not row_end:
+                    continue
+            
+                booking_lines += (
+                    f'<div class="slot-pill" '
+                    f'style="background:{status_color(row_status)}; '
+                    f'border-color:{status_border(row_status)}; '
+                    f'display:block; width:100%; box-sizing:border-box; '
+                    f'white-space:normal;">'
+                    f'{status_icon(row_status)} {row_start}-{row_end}'
+                    f'<br><span style="font-size:11px; color:#555;">{applicant}</span>'
+                    f'</div>'
+                )
 
                 if not booking_lines:
                     booking_lines = (
