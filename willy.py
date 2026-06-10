@@ -1388,12 +1388,19 @@ def render_booking_table(resource_type: str) -> None:
                 if row["checkin"] == "未簽到":
                     if st.button("簽到並開始使用", key=f"checkin_{row_id}"):
                         new_df = df.copy()
-                        new_df.loc[new_df["id"] == row_id, "checkin"] = "已簽到"
-                        new_df.loc[new_df["id"] == row_id, "status"] = "使用中"
-                        new_df.loc[new_df["id"] == row_id, "checkin_time"] = datetime.now(TW_TZ).strftime("%Y-%m-%d %H:%M:%S")
-
+                    
+                        mask = new_df["id"].astype(str) == row_id
+                    
+                        new_df.loc[mask, "checkin"] = "已簽到"
+                        new_df.loc[mask, "status"] = "使用中"
+                        new_df.loc[mask, "checkin_time"] = datetime.now(TW_TZ).strftime("%Y-%m-%d %H:%M:%S")
+                        new_df.loc[mask, "closed_time"] = ""
+                    
                         if save_data(new_df):
+                            st.success("已簽到並開始使用")
                             safe_rerun()
+                        else:
+                            st.error("簽到失敗，請確認 Google Sheet 權限或 API 配額")
                 else:
                     if st.button("結束使用並釋出", key=f"finish_{row_id}"):
                         new_df = df.copy()
