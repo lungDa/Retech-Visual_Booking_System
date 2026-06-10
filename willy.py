@@ -1002,16 +1002,15 @@ def day_status(resource_type: str, resource_name: str, day_value: date) -> str:
     return "部分預約"
 
 
-df, released_count = auto_release_expired_unchecked_bookings(df)
+latest_df = load_data()
 
-if released_count > 0:
-    save_data(df)
+latest_df, released_count = auto_release_expired_unchecked_bookings(latest_df)
+latest_df, deleted_count = cleanup_old_deleted_bookings(latest_df)
 
-df, deleted_count = cleanup_old_deleted_bookings(df)
+if released_count > 0 or deleted_count > 0:
+    save_data(latest_df)
 
-if deleted_count > 0:
-    save_data(df)
-
+df = latest_df
 # =========================================================
 # UI 元件
 # =========================================================
