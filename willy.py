@@ -529,9 +529,6 @@ def save_data(dataframe: pd.DataFrame) -> bool:
 
         dataframe = dataframe[REQUIRED_COLUMNS].copy()
 
-        st.write("準備寫入資料：")
-        st.dataframe(dataframe.tail(3))
-
         conn.update(
             worksheet=WORKSHEET_NAME,
             data=dataframe
