@@ -696,11 +696,13 @@ def auto_release_expired_unchecked_bookings(dataframe: pd.DataFrame) -> tuple[pd
 
         no_checkin_expired = (
             row["checkin"] == "未簽到"
+            and start_dt.date() == now.date()
             and now > start_dt + timedelta(minutes=15)
         )
 
         usage_finished = (
             row["checkin"] == "已簽到"
+            and end_dt.date() == now.date()
             and now >= end_dt
         )
 
