@@ -1389,20 +1389,25 @@ def render_booking_table(resource_type: str) -> None:
             with c4:
                 if row["checkin"] == "未簽到":
                     if st.button("簽到並開始使用", key=f"checkin_{row_id}"):
-                        new_df = df.copy()
+                        latest_df = load_data()
+                        latest_df["id"] = latest_df["id"].astype(str)
                     
-                        mask = new_df["id"].astype(str) == row_id
+                        mask = latest_df["id"] == row_id
                     
-                        new_df.loc[mask, "checkin"] = "已簽到"
-                        new_df.loc[mask, "status"] = "使用中"
-                        new_df.loc[mask, "checkin_time"] = datetime.now(TW_TZ).strftime("%Y-%m-%d %H:%M:%S")
-                        new_df.loc[mask, "closed_time"] = ""
+                        if not mask.any():
+                            st.error("找不到這筆預約資料，請重新同步後再試。")
+                            return
                     
-                        if save_data(new_df):
-                            st.success("已簽到並開始使用")
+                        latest_df.loc[mask, "checkin"] = "已簽到"
+                        latest_df.loc[mask, "status"] = "使用中"
+                        latest_df.loc[mask, "checkin_time"] = datetime.now(TW_TZ).strftime("%Y-%m-%d %H:%M:%S")
+                        latest_df.loc[mask, "closed_time"] = ""
+                    
+                        if save_data(latest_df):
+                            st.success("簽到成功，已開始使用。")
                             safe_rerun()
                         else:
-                            st.error("簽到失敗，請確認 Google Sheet 權限或 API 配額")
+                            st.error("簽到失敗，Google Sheet 沒有寫入成功。")
                 else:
                     if st.button("結束使用並釋出", key=f"finish_{row_id}"):
                         new_df = df.copy()
