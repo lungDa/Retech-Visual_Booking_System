@@ -77,18 +77,33 @@ STATUS_ICON = {
     "使用中": "🟠",
     "已預約": "🔴",
     "休假": "🚫",
+    "已取消": "⚫",
+    "已結束": "⚫",
+    "已失效": "⚫",
 }
 
 STATUS_COLOR = {
     "閒置中": "#e8f8ef",
+    "部分預約": "#fff3df",
+    "已滿": "#fdecec",
     "使用中": "#fff3df",
     "已預約": "#fdecec",
+    "休假": "#f5f5f5",
+    "已取消": "#eeeeee",
+    "已結束": "#eeeeee",
+    "已失效": "#eeeeee",
 }
 
 STATUS_BORDER = {
     "閒置中": "#2ecc71",
+    "部分預約": "#f39c12",
+    "已滿": "#e74c3c",
     "使用中": "#f39c12",
     "已預約": "#e74c3c",
+    "休假": "#999999",
+    "已取消": "#999999",
+    "已結束": "#999999",
+    "已失效": "#999999",
 }
 
 def is_closed_status(status) -> bool:
@@ -158,8 +173,8 @@ st.markdown(
 
 .calendar-day,
 .calendar-day-muted {
-    height: 180px;
-    max-height: 180px;
+    height: 210px;
+    max-height: 210px;
     overflow-y: auto;
     border-radius: 12px;
     padding: 10px;
@@ -489,13 +504,13 @@ def normalize_df(dataframe: pd.DataFrame | None) -> pd.DataFrame:
     return dataframe.reset_index(drop=True)
 
 
-def load_data() -> pd.DataFrame:
+def load_data(force_fresh: bool = False) -> pd.DataFrame:
     if conn is None:
         st.sidebar.warning("目前使用本機空資料，尚未連線 Google Sheet")
         return empty_booking_df()
 
     try:
-        dataframe = conn.read(worksheet=WORKSHEET_NAME, ttl=30)
+        dataframe = conn.read(worksheet=WORKSHEET_NAME, ttl=0 if force_fresh else 30)
         dataframe = normalize_df(dataframe)
         st.sidebar.success("雲端資料讀取成功")
         st.sidebar.caption(f"工作表：{WORKSHEET_NAME}")
@@ -568,6 +583,16 @@ def parse_booking_datetime(booking_date_value, time_value) -> datetime | None:
 def is_overlap(start_a: datetime, end_a: datetime, start_b: datetime, end_b: datetime) -> bool:
     return start_a < end_b and start_b < end_a
 
+def active_bookings(dataframe: pd.DataFrame) -> pd.DataFrame:
+    """只回傳仍會佔用時段的有效預約。"""
+    if dataframe is None or dataframe.empty:
+        return empty_booking_df()
+
+    return dataframe[
+        ~dataframe["status"].isin(["已取消", "已結束", "已失效"])
+    ].copy()
+
+
 def has_booking_conflict(
     resource_type: str,
     resource_name: str,
@@ -575,58 +600,14 @@ def has_booking_conflict(
     start_time: str,
     end_time: str,
 ) -> bool:
-    try:
-        day_value = (
-            booking_date_value
-            if isinstance(booking_date_value, date)
-            else pd.to_datetime(booking_date_value).date()
-        )
-    except Exception:
-        return True
-
-    if is_closed_day(day_value):
-        return True
-
-    query_start = parse_booking_datetime(
+    return get_conflict_booking(
+        resource_type,
+        resource_name,
         booking_date_value,
-        start_time
-    )
-
-    query_end = parse_booking_datetime(
-        booking_date_value,
+        start_time,
         end_time
-    )
+    ) is not None
 
-    if query_start is None or query_end is None or query_start >= query_end:
-        return True
-
-    related = df[
-        (df["resource_type"] == resource_type)
-        & (df["resource_name"] == resource_name)
-        & (df["booking_date"] == to_date_text(booking_date_value))
-        & (~df["status"].isin(["已取消", "已結束", "已失效"]))
-    ]
-
-    for _, row in related.iterrows():
-        row_start = parse_booking_datetime(
-            row["booking_date"],
-            row["start_time"]
-        )
-
-        row_end = parse_booking_datetime(
-            row["booking_date"],
-            row["end_time"]
-        )
-
-        if row_start and row_end and is_overlap(
-            query_start,
-            query_end,
-            row_start,
-            row_end
-        ):
-            return True
-
-    return False
 
 def get_conflict_booking(
     resource_type,
@@ -635,36 +616,34 @@ def get_conflict_booking(
     start_time,
     end_time
 ):
-    query_start = parse_booking_datetime(
-        booking_date_value,
-        start_time
-    )
+    try:
+        day_value = (
+            booking_date_value
+            if isinstance(booking_date_value, date)
+            else pd.to_datetime(booking_date_value).date()
+        )
+    except Exception:
+        return None
 
-    query_end = parse_booking_datetime(
-        booking_date_value,
-        end_time
-    )
+    if is_closed_day(day_value):
+        return None
+
+    query_start = parse_booking_datetime(booking_date_value, start_time)
+    query_end = parse_booking_datetime(booking_date_value, end_time)
 
     if query_start is None or query_end is None or query_start >= query_end:
         return None
 
-    related = df[
-        (df["resource_type"] == resource_type)
-        & (df["resource_name"] == resource_name)
-        & (df["booking_date"] == to_date_text(booking_date_value))
-        & (~df["status"].isin(["已取消", "已結束", "已失效"]))
+    related = active_bookings(df)
+    related = related[
+        (related["resource_type"] == resource_type)
+        & (related["resource_name"] == resource_name)
+        & (related["booking_date"] == to_date_text(booking_date_value))
     ]
 
     for _, row in related.iterrows():
-        row_start = parse_booking_datetime(
-            row["booking_date"],
-            row["start_time"]
-        )
-
-        row_end = parse_booking_datetime(
-            row["booking_date"],
-            row["end_time"]
-        )
+        row_start = parse_booking_datetime(row["booking_date"], row["start_time"])
+        row_end = parse_booking_datetime(row["booking_date"], row["end_time"])
 
         if row_start and row_end and is_overlap(
             query_start,
@@ -676,17 +655,25 @@ def get_conflict_booking(
 
     return None
 
+
 def auto_release_expired_unchecked_bookings(dataframe: pd.DataFrame) -> tuple[pd.DataFrame, int]:
     """
     自動釋出規則：
-    1. 未簽到：開始後 15 分鐘未簽到，自動刪除預約，恢復閒置
-    2. 已簽到/使用中：結束時間到，自動刪除預約，恢復閒置
+    1. 未簽到：只處理今天、已預約、開始後 15 分鐘仍未簽到，改成已失效並保留資料。
+    2. 已簽到 / 使用中：只處理今天、結束時間到，改成已結束並保留資料。
     """
     now = datetime.now(TW_TZ)
     keep_rows = []
     released_count = 0
 
     for _, row in dataframe.iterrows():
+        row = row.copy()
+        row_status = normalize_status(row.get("status", ""))
+
+        if row_status in ["已取消", "已結束", "已失效"]:
+            keep_rows.append(row)
+            continue
+
         start_dt = parse_booking_datetime(row["booking_date"], row["start_time"])
         end_dt = parse_booking_datetime(row["booking_date"], row["end_time"])
 
@@ -695,27 +682,29 @@ def auto_release_expired_unchecked_bookings(dataframe: pd.DataFrame) -> tuple[pd
             continue
 
         no_checkin_expired = (
-            row["checkin"] == "未簽到"
+            row_status == "已預約"
+            and row["checkin"] == "未簽到"
             and start_dt.date() == now.date()
             and now > start_dt + timedelta(minutes=15)
         )
 
         usage_finished = (
-            row["checkin"] == "已簽到"
+            row_status == "使用中"
+            and row["checkin"] == "已簽到"
             and end_dt.date() == now.date()
             and now >= end_dt
         )
 
         if no_checkin_expired:
             row["status"] = "已失效"
-            row["closed_time"] = datetime.now(TW_TZ).strftime("%Y-%m-%d %H:%M:%S")
+            row["closed_time"] = now.strftime("%Y-%m-%d %H:%M:%S")
             keep_rows.append(row)
             released_count += 1
             continue
-        
+
         if usage_finished:
             row["status"] = "已結束"
-            row["closed_time"] = datetime.now(TW_TZ).strftime("%Y-%m-%d %H:%M:%S")
+            row["closed_time"] = now.strftime("%Y-%m-%d %H:%M:%S")
             keep_rows.append(row)
             released_count += 1
             continue
@@ -725,162 +714,45 @@ def auto_release_expired_unchecked_bookings(dataframe: pd.DataFrame) -> tuple[pd
     result = pd.DataFrame(keep_rows) if keep_rows else empty_booking_df()
     return normalize_df(result), released_count
 
+
 def cleanup_old_deleted_bookings(
     dataframe: pd.DataFrame
 ) -> tuple[pd.DataFrame, int]:
-
+    """
+    已取消 / 已結束 / 已失效資料保留 30 天。
+    以 closed_time 起算；closed_time 為空則不刪除。
+    """
     now = datetime.now(TW_TZ)
-
     keep_rows = []
     deleted_count = 0
 
     for _, row in dataframe.iterrows():
+        row_status = normalize_status(row.get("status", ""))
 
-        status = normalize_status(
-            row.get("status", "")
-        )
-
-        if status not in [
-            "已取消",
-            "已結束",
-            "已失效"
-        ]:
+        if row_status not in ["已取消", "已結束", "已失效"]:
             keep_rows.append(row)
             continue
 
-        closed_time = str(
-            row.get("closed_time", "")
-        ).strip()
+        closed_time = str(row.get("closed_time", "")).strip()
 
         if not closed_time:
             keep_rows.append(row)
             continue
 
-        closed_dt = pd.to_datetime(
-            closed_time,
-            errors="coerce"
-        )
+        closed_dt = pd.to_datetime(closed_time, errors="coerce")
 
         if pd.isna(closed_dt):
             keep_rows.append(row)
             continue
 
-        age_days = (
-            now - closed_dt.to_pydatetime()
-        ).days
-
-        if age_days >= 30:
+        if (now - closed_dt.to_pydatetime().replace(tzinfo=TW_TZ)).days >= 30:
             deleted_count += 1
             continue
 
         keep_rows.append(row)
 
-    result = (
-        pd.DataFrame(keep_rows)
-        if keep_rows
-        else empty_booking_df()
-    )
-
+    result = pd.DataFrame(keep_rows) if keep_rows else empty_booking_df()
     return normalize_df(result), deleted_count
-    
-def cleanup_old_deleted_bookings(dataframe: pd.DataFrame) -> tuple[pd.DataFrame, int]:
-
-    today_value = datetime.now(TW_TZ).date()
-
-    keep_rows = []
-    deleted_count = 0
-
-    for _, row in dataframe.iterrows():
-
-        row_status = normalize_status(
-            row.get("status", "")
-        )
-
-        if row_status not in [
-            "已取消",
-            "已結束",
-            "已失效"
-        ]:
-            keep_rows.append(row)
-            continue
-
-        row_date_text = to_date_text(
-            row.get("booking_date", "")
-        )
-
-        row_date = pd.to_datetime(
-            row_date_text,
-            errors="coerce"
-        )
-
-        if pd.isna(row_date):
-            keep_rows.append(row)
-            continue
-
-        row_date_value = row_date.date()
-
-        if (today_value - row_date_value).days >= 30:
-            deleted_count += 1
-            continue
-
-        keep_rows.append(row)
-
-    result = (
-        pd.DataFrame(keep_rows)
-        if keep_rows
-        else empty_booking_df()
-    )
-
-    return normalize_df(result), deleted_count    
-
-
-def get_conflict_booking(
-    resource_type,
-    resource_name,
-    booking_date_value,
-    start_time,
-    end_time
-):
-
-    query_start = parse_booking_datetime(
-        booking_date_value,
-        start_time
-    )
-
-    query_end = parse_booking_datetime(
-        booking_date_value,
-        end_time
-    )
-
-    related = df[
-        (df["resource_type"] == resource_type)
-        & (df["resource_name"] == resource_name)
-        & (df["booking_date"] == to_date_text(booking_date_value))
-    ]
-
-    for _, row in related.iterrows():
-
-        row_start = parse_booking_datetime(
-            row["booking_date"],
-            row["start_time"]
-        )
-
-        row_end = parse_booking_datetime(
-            row["booking_date"],
-            row["end_time"]
-        )
-
-        if row_start and row_end:
-
-            if is_overlap(
-                query_start,
-                query_end,
-                row_start,
-                row_end
-            ):
-                return row
-
-    return None
 
 
 def available_resources(resource_type: str, booking_date_value, start_time: str, end_time: str) -> list[str]:
@@ -908,10 +780,11 @@ def get_resource_status(resource_type: str, resource_name: str, target_date=None
 
     # 依現在時間判斷
     if target_start is None or target_end is None:
-        related = df[
-            (df["resource_type"] == resource_type)
-            & (df["resource_name"] == resource_name)
-            & (df["booking_date"] == today_text)
+        related = active_bookings(df)
+        related = related[
+            (related["resource_type"] == resource_type)
+            & (related["resource_name"] == resource_name)
+            & (related["booking_date"] == today_text)
         ]
 
         if related.empty:
@@ -937,10 +810,11 @@ def get_resource_status(resource_type: str, resource_name: str, target_date=None
     if query_start is None or query_end is None or query_start >= query_end:
         return "已預約"
 
-    related = df[
-        (df["resource_type"] == resource_type)
-        & (df["resource_name"] == resource_name)
-        & (df["booking_date"] == to_date_text(target_date))
+    related = active_bookings(df)
+    related = related[
+        (related["resource_type"] == resource_type)
+        & (related["resource_name"] == resource_name)
+        & (related["booking_date"] == to_date_text(target_date))
     ]
 
     if related.empty:
@@ -961,10 +835,11 @@ def day_status(resource_type: str, resource_name: str, day_value: date) -> str:
     if is_closed_day(day_value):
         return "休假"
 
-    day_bookings = df[
-        (df["resource_type"] == resource_type)
-        & (df["resource_name"] == resource_name)
-        & (df["booking_date"] == to_date_text(day_value))
+    day_bookings = active_bookings(df)
+    day_bookings = day_bookings[
+        (day_bookings["resource_type"] == resource_type)
+        & (day_bookings["resource_name"] == resource_name)
+        & (day_bookings["booking_date"] == to_date_text(day_value))
     ]
 
     if day_bookings.empty:
@@ -1002,15 +877,24 @@ def day_status(resource_type: str, resource_name: str, day_value: date) -> str:
     return "部分預約"
 
 
-latest_df = load_data()
+# 讀取主要資料：平常快取 30 秒，降低 Google Sheets API 429 風險
+df = load_data()
 
-latest_df, released_count = auto_release_expired_unchecked_bookings(latest_df)
-latest_df, deleted_count = cleanup_old_deleted_bookings(latest_df)
+# 自動釋出 / 30天清理：最多每 60 秒執行一次，且一定讀最新雲端資料，避免用舊資料覆蓋簽到時間
+if "last_maintenance_time" not in st.session_state:
+    st.session_state.last_maintenance_time = 0
 
-if released_count > 0 or deleted_count > 0:
-    save_data(latest_df)
+if time.time() - st.session_state.last_maintenance_time >= 60:
+    st.session_state.last_maintenance_time = time.time()
 
-df = latest_df
+    latest_df = load_data(force_fresh=True)
+    latest_df, released_count = auto_release_expired_unchecked_bookings(latest_df)
+    latest_df, deleted_count = cleanup_old_deleted_bookings(latest_df)
+
+    if released_count > 0 or deleted_count > 0:
+        save_data(latest_df)
+
+    df = latest_df
 # =========================================================
 # UI 元件
 # =========================================================
@@ -1100,7 +984,6 @@ def render_booking_form(resource_type: str) -> None:
 
     if not submitted:
         return
-    st.info("已按下確認預約，開始檢查資料...")
     
     if is_closed_day(booking_date_value):
         st.error(f"{booking_date_value} 為 {closed_day_name(booking_date_value)}，不開放預約。")
@@ -1110,12 +993,15 @@ def render_booking_form(resource_type: str) -> None:
         st.warning("請輸入預約人")
         return
 
+    global df
+    df = load_data(force_fresh=True)
+
     conflict = get_conflict_booking(
-    resource_type,
-    resource_name,
-    booking_date_value,
-    start_time,
-    end_time
+        resource_type,
+        resource_name,
+        booking_date_value,
+        start_time,
+        end_time
     )
 
     if conflict is not None:
@@ -1150,7 +1036,7 @@ def render_booking_form(resource_type: str) -> None:
     "checkin_time": "",
     "closed_time": "",
 }
-    latest_df = load_data()
+    latest_df = load_data(force_fresh=True)
     
     updated_df = pd.concat(
         [latest_df, pd.DataFrame([new_row])],
@@ -1162,52 +1048,6 @@ def render_booking_form(resource_type: str) -> None:
         safe_rerun()
 
 
-def get_conflict_booking(
-    resource_type,
-    resource_name,
-    booking_date_value,
-    start_time,
-    end_time
-):
-    query_start = parse_booking_datetime(
-        booking_date_value,
-        start_time
-    )
-
-    query_end = parse_booking_datetime(
-        booking_date_value,
-        end_time
-    )
-
-    related = df[
-        (df["resource_type"] == resource_type)
-        & (df["resource_name"] == resource_name)
-        & (df["booking_date"] == to_date_text(booking_date_value))
-    ]
-
-    for _, row in related.iterrows():
-
-        row_start = parse_booking_datetime(
-            row["booking_date"],
-            row["start_time"]
-        )
-
-        row_end = parse_booking_datetime(
-            row["booking_date"],
-            row["end_time"]
-        )
-
-        if row_start and row_end:
-
-            if is_overlap(
-                query_start,
-                query_end,
-                row_start,
-                row_end
-            ):
-                return row
-
-    return None
 def render_calendar(resource_type: str) -> None:
     st.write(f"### {resource_type}月曆")
 
@@ -1388,7 +1228,7 @@ def render_booking_table(resource_type: str) -> None:
             with c4:
                 if row["checkin"] == "未簽到":
                     if st.button("簽到並開始使用", key=f"checkin_{row_id}"):
-                        latest_df = load_data()
+                        latest_df = load_data(force_fresh=True)
                         latest_df["id"] = latest_df["id"].astype(str)
                     
                         mask = latest_df["id"] == row_id
@@ -1500,7 +1340,7 @@ if st.sidebar.button("🧹 清除假日快取"):
     st.cache_data.clear()
     safe_rerun()
 
-st.sidebar.caption("系統每 30 秒自動刷新一次。")
+st.sidebar.caption("系統每 300 秒自動刷新一次。")
 st.sidebar.caption("工作表名稱固定使用 Tasks。")
 
 # =========================================================
