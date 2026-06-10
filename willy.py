@@ -42,7 +42,7 @@ components.html(
 )
 
 st.title("鋒霈環境科技股份有限公司")
-st.caption("台中分公司雲端同步智慧資源預約系統")
+st.caption("台中分公司雲端同步視覺化預約系統")
 
 WORKSHEET_NAME = "Tasks"
 
