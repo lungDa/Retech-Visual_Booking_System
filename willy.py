@@ -1327,7 +1327,6 @@ def render_resource_page(resource_type: str) -> None:
 # =========================================================
 # 側邊欄
 # =========================================================
-st.sidebar.write("### 系統狀態")
 st.sidebar.write(f"目前時間：{datetime.now(TW_TZ).strftime('%Y-%m-%d %H:%M:%S')}")
 
 holiday_df = load_taiwan_calendar()
@@ -1341,7 +1340,6 @@ if st.sidebar.button("🧹 清除假日快取"):
     safe_rerun()
 
 st.sidebar.caption("系統每 300 秒自動刷新一次。")
-st.sidebar.caption("工作表名稱固定使用 Tasks。")
 
 # =========================================================
 # 主畫面：只保留三個分頁
