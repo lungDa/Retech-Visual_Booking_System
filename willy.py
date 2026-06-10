@@ -21,10 +21,6 @@ st.set_page_config(
     page_icon="🏢",
     layout="wide"
 )
-
-if "last_auto_refresh" not in st.session_state:
-    st.session_state.last_auto_refresh = time.time()
-
 # 每 300 秒自動刷新一次，讓狀態可隨時間變化
 components.html(
     """
@@ -499,7 +495,7 @@ def load_data() -> pd.DataFrame:
         return empty_booking_df()
 
     try:
-        dataframe = conn.read(worksheet=WORKSHEET_NAME, ttl=0)
+        dataframe = conn.read(worksheet=WORKSHEET_NAME, ttl=30)
         dataframe = normalize_df(dataframe)
         st.sidebar.success("雲端資料讀取成功")
         st.sidebar.caption(f"工作表：{WORKSHEET_NAME}")
@@ -1039,16 +1035,6 @@ def time_range_selector(prefix: str, default_index: int = 2) -> tuple[str, str]:
 
 def render_status_cards(resource_type: str, target_date=None, target_start=None, target_end=None) -> None:
     global df
-
-    # 每次顯示狀態前，先重新讀取雲端最新資料
-    df = load_data()
-
-    # 每次顯示狀態前，先自動釋出過期預約
-    df, released_count = auto_release_expired_unchecked_bookings(df)
-
-    if released_count > 0:
-        save_data(df)
-        st.warning(f"系統已自動釋出 {released_count} 筆逾時預約。")
 
     st.write(f"### {resource_type}即時狀態")
     st.caption(f"目前時間：{datetime.now(TW_TZ).strftime('%Y-%m-%d %H:%M:%S')}")
