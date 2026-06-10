@@ -17,7 +17,7 @@ TW_TZ = timezone(timedelta(hours=8))
 # 基本設定
 # =========================================================
 st.set_page_config(
-    page_title="智慧資源預約系統",
+    page_title="視覺化預約系統",
     page_icon="🏢",
     layout="wide"
 )
