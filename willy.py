@@ -61,6 +61,9 @@ STATUS_OPTIONS = [
     "使用中",
     "已預約",
     "休假",
+    "已取消",
+    "已結束",
+    "已失效",
 ]
 CHECKIN_OPTIONS = ["未簽到", "已簽到"]
 
@@ -115,6 +118,7 @@ REQUIRED_COLUMNS = [
     "purpose",
     "created_at",
     "checkin_time",
+    "closed_time",
 ]
 
 # =========================================================
@@ -607,6 +611,7 @@ def has_booking_conflict(
         (df["resource_type"] == resource_type)
         & (df["resource_name"] == resource_name)
         & (df["booking_date"] == to_date_text(booking_date_value))
+        & (~df["status"].isin(["已取消", "已結束", "已失效"]))
     ]
 
     for _, row in related.iterrows():
@@ -654,6 +659,7 @@ def get_conflict_booking(
         (df["resource_type"] == resource_type)
         & (df["resource_name"] == resource_name)
         & (df["booking_date"] == to_date_text(booking_date_value))
+        & (~df["status"].isin(["已取消", "已結束", "已失效"]))
     ]
 
     for _, row in related.iterrows():
@@ -705,7 +711,17 @@ def auto_release_expired_unchecked_bookings(dataframe: pd.DataFrame) -> tuple[pd
             and now >= end_dt
         )
 
-        if no_checkin_expired or usage_finished:
+        if no_checkin_expired:
+            row["status"] = "已失效"
+            row["closed_time"] = datetime.now(TW_TZ).strftime("%Y-%m-%d %H:%M:%S")
+            keep_rows.append(row)
+            released_count += 1
+            continue
+        
+        if usage_finished:
+            row["status"] = "已結束"
+            row["closed_time"] = datetime.now(TW_TZ).strftime("%Y-%m-%d %H:%M:%S")
+            keep_rows.append(row)
             released_count += 1
             continue
 
@@ -713,6 +729,114 @@ def auto_release_expired_unchecked_bookings(dataframe: pd.DataFrame) -> tuple[pd
 
     result = pd.DataFrame(keep_rows) if keep_rows else empty_booking_df()
     return normalize_df(result), released_count
+
+def cleanup_old_deleted_bookings(
+    dataframe: pd.DataFrame
+) -> tuple[pd.DataFrame, int]:
+
+    now = datetime.now(TW_TZ)
+
+    keep_rows = []
+    deleted_count = 0
+
+    for _, row in dataframe.iterrows():
+
+        status = normalize_status(
+            row.get("status", "")
+        )
+
+        if status not in [
+            "已取消",
+            "已結束",
+            "已失效"
+        ]:
+            keep_rows.append(row)
+            continue
+
+        closed_time = str(
+            row.get("closed_time", "")
+        ).strip()
+
+        if not closed_time:
+            keep_rows.append(row)
+            continue
+
+        closed_dt = pd.to_datetime(
+            closed_time,
+            errors="coerce"
+        )
+
+        if pd.isna(closed_dt):
+            keep_rows.append(row)
+            continue
+
+        age_days = (
+            now - closed_dt.to_pydatetime()
+        ).days
+
+        if age_days >= 30:
+            deleted_count += 1
+            continue
+
+        keep_rows.append(row)
+
+    result = (
+        pd.DataFrame(keep_rows)
+        if keep_rows
+        else empty_booking_df()
+    )
+
+    return normalize_df(result), deleted_count
+    
+def cleanup_old_deleted_bookings(dataframe: pd.DataFrame) -> tuple[pd.DataFrame, int]:
+
+    today_value = datetime.now(TW_TZ).date()
+
+    keep_rows = []
+    deleted_count = 0
+
+    for _, row in dataframe.iterrows():
+
+        row_status = normalize_status(
+            row.get("status", "")
+        )
+
+        if row_status not in [
+            "已取消",
+            "已結束",
+            "已失效"
+        ]:
+            keep_rows.append(row)
+            continue
+
+        row_date_text = to_date_text(
+            row.get("booking_date", "")
+        )
+
+        row_date = pd.to_datetime(
+            row_date_text,
+            errors="coerce"
+        )
+
+        if pd.isna(row_date):
+            keep_rows.append(row)
+            continue
+
+        row_date_value = row_date.date()
+
+        if (today_value - row_date_value).days >= 30:
+            deleted_count += 1
+            continue
+
+        keep_rows.append(row)
+
+    result = (
+        pd.DataFrame(keep_rows)
+        if keep_rows
+        else empty_booking_df()
+    )
+
+    return normalize_df(result), deleted_count    
 
 
 def get_conflict_booking(
@@ -884,8 +1008,14 @@ def day_status(resource_type: str, resource_name: str, day_value: date) -> str:
 
 
 df, released_count = auto_release_expired_unchecked_bookings(df)
-if released_count > 0 and save_data(df):
-    st.warning(f"系統已自動釋出 {released_count} 筆超過 15 分鐘未簽到的預約。")
+
+if released_count > 0:
+    save_data(df)
+
+df, deleted_count = cleanup_old_deleted_bookings(df)
+
+if deleted_count > 0:
+    save_data(df)
 
 # =========================================================
 # UI 元件
@@ -1022,20 +1152,20 @@ def render_booking_form(resource_type: str) -> None:
         return
 
     new_row = {
-        "id": str(uuid.uuid4()),
-        "resource_type": resource_type,
-        "resource_name": resource_name,
-        "booking_date": to_date_text(booking_date_value),
-        "start_time": start_time,
-        "end_time": end_time,
-        "applicant": applicant.strip(),
-        "status": "已預約",
-        "checkin": "未簽到",
-        "purpose": purpose.strip(),
-        "created_at": datetime.now(TW_TZ).strftime("%Y-%m-%d %H:%M:%S"),
-        "checkin_time": "",
-    }
-
+    "id": str(uuid.uuid4()),
+    "resource_type": resource_type,
+    "resource_name": resource_name,
+    "booking_date": to_date_text(booking_date_value),
+    "start_time": start_time,
+    "end_time": end_time,
+    "applicant": applicant.strip(),
+    "status": "已預約",
+    "checkin": "未簽到",
+    "purpose": purpose.strip(),
+    "created_at": datetime.now(TW_TZ).strftime("%Y-%m-%d %H:%M:%S"),
+    "checkin_time": "",
+    "closed_time": "",
+}
     latest_df = load_data()
     
     updated_df = pd.concat(
@@ -1231,8 +1361,18 @@ def render_booking_table(resource_type: str) -> None:
             c1, c2, c3, c4 = st.columns([2, 2, 2, 2])
 
             with c1:
-                st.markdown(f"**{row['resource_name']}**")
-                st.caption(f"{row['booking_date']} {row['start_time']}~{row['end_time']}")
+                is_deleted_style = row["status"] in ["已取消", "已結束", "已失效"]
+
+                if is_deleted_style:
+                    st.markdown(
+                        f"~~**{row['resource_name']}**~~"
+                    )
+                    st.caption(
+                        f"~~{row['booking_date']} {row['start_time']}~{row['end_time']}~~"
+                    )
+                else:
+                    st.markdown(f"**{row['resource_name']}**")
+                    st.caption(f"{row['booking_date']} {row['start_time']}~{row['end_time']}")
 
             with c2:
                 st.write(f"預約人：{row['applicant']}")
@@ -1254,11 +1394,20 @@ def render_booking_table(resource_type: str) -> None:
                             safe_rerun()
                 else:
                     if st.button("結束使用並釋出", key=f"finish_{row_id}"):
-                        if save_data(df[df["id"] != row_id]):
+                        new_df = df.copy()
+                        new_df.loc[new_df["id"] == row_id, "status"] = "已結束"
+                        new_df.loc[new_df["id"] == row_id,"closed_time"] = datetime.now(TW_TZ).strftime("%Y-%m-%d %H:%M:%S")
+                    
+                        if save_data(new_df):
                             safe_rerun()
 
                 if st.button("取消預約", key=f"cancel_{row_id}"):
-                    if save_data(df[df["id"] != row_id]):
+                    new_df = df.copy()
+                    new_df.loc[new_df["id"] == row_id, "status"] = "已取消"
+                    new_df.loc[new_df["id"] == row_id,"closed_time"] = datetime.now(TW_TZ).strftime("%Y-%m-%d %H:%M:%S")
+                    new_df.loc[new_df["id"] == row_id, "checkin"] = "未簽到"
+                
+                    if save_data(new_df):
                         safe_rerun()
 
 
