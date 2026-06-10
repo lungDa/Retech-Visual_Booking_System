@@ -522,25 +522,26 @@ def save_data(dataframe: pd.DataFrame) -> bool:
     try:
         dataframe = normalize_df(dataframe)
 
-        # 防止空資料覆蓋整張表
         if dataframe.empty:
             st.error("資料為空，已阻止覆蓋 Google Sheet。")
             return False
 
         dataframe = dataframe[REQUIRED_COLUMNS].copy()
-        conn.update(worksheet=WORKSHEET_NAME, data=dataframe)
+
+        st.write("準備寫入資料：")
+        st.dataframe(dataframe.tail(3))
+
+        conn.update(
+            worksheet=WORKSHEET_NAME,
+            data=dataframe
+        )
 
         return True
 
-    except PermissionError:
-        st.error("Google Sheet 權限不足，請確認 Service Account Email 已加入為編輯者。")
-        return False
-
     except Exception as e:
-        st.error("寫入 Google Sheet 失敗")
+        st.error("寫入 Google Sheet 失敗，詳細錯誤如下：")
         st.exception(e)
         return False
-
 
 df = load_data()
 
@@ -868,7 +869,8 @@ def render_booking_form(resource_type: str) -> None:
 
     if not submitted:
         return
-
+    st.info("已按下確認預約，開始檢查資料...")
+    
     if is_closed_day(booking_date_value):
         st.error(f"{booking_date_value} 為 {closed_day_name(booking_date_value)}，不開放預約。")
         return
@@ -897,7 +899,16 @@ def render_booking_form(resource_type: str) -> None:
     }
 
     latest_df = load_data()
-    updated_df = pd.concat([latest_df, pd.DataFrame([new_row])], ignore_index=True)
+
+    st.write("目前 Sheet 資料筆數：", len(latest_df))
+    
+    updated_df = pd.concat(
+        [latest_df, pd.DataFrame([new_row])],
+        ignore_index=True
+    )
+    
+    st.write("準備寫入的最後幾筆資料：")
+    st.dataframe(updated_df.tail())
 
     if save_data(updated_df):
         st.success(f"{resource_name} 已成功預約：{booking_date_value} {start_time}~{end_time}")
