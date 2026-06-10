@@ -899,17 +899,12 @@ def render_booking_form(resource_type: str) -> None:
     }
 
     latest_df = load_data()
-
-    st.write("目前 Sheet 資料筆數：", len(latest_df))
     
     updated_df = pd.concat(
         [latest_df, pd.DataFrame([new_row])],
         ignore_index=True
     )
     
-    st.write("準備寫入的最後幾筆資料：")
-    st.dataframe(updated_df.tail())
-
     if save_data(updated_df):
         st.success(f"{resource_name} 已成功預約：{booking_date_value} {start_time}~{end_time}")
         safe_rerun()
