@@ -1048,7 +1048,7 @@ def render_status_cards(resource_type: str, target_date=None, target_start=None,
 
     if released_count > 0:
         save_data(df)
-        #st.warning(f"系統已自動釋出 {released_count} 筆逾時預約。")
+        st.warning(f"系統已自動釋出 {released_count} 筆逾時預約。")
 
     st.write(f"### {resource_type}即時狀態")
     st.caption(f"目前時間：{datetime.now(TW_TZ).strftime('%Y-%m-%d %H:%M:%S')}")
