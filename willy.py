@@ -25,10 +25,6 @@ st.set_page_config(
 if "last_auto_refresh" not in st.session_state:
     st.session_state.last_auto_refresh = time.time()
 
-if time.time() - st.session_state.last_auto_refresh >= 30:
-    st.session_state.last_auto_refresh = time.time()
-    st.rerun()
-
 # 每 300 秒自動刷新一次，讓狀態可隨時間變化
 components.html(
     """
