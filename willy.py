@@ -571,6 +571,111 @@ def parse_booking_datetime(booking_date_value, time_value) -> datetime | None:
 def is_overlap(start_a: datetime, end_a: datetime, start_b: datetime, end_b: datetime) -> bool:
     return start_a < end_b and start_b < end_a
 
+def has_booking_conflict(
+    resource_type: str,
+    resource_name: str,
+    booking_date_value,
+    start_time: str,
+    end_time: str,
+) -> bool:
+    try:
+        day_value = (
+            booking_date_value
+            if isinstance(booking_date_value, date)
+            else pd.to_datetime(booking_date_value).date()
+        )
+    except Exception:
+        return True
+
+    if is_closed_day(day_value):
+        return True
+
+    query_start = parse_booking_datetime(
+        booking_date_value,
+        start_time
+    )
+
+    query_end = parse_booking_datetime(
+        booking_date_value,
+        end_time
+    )
+
+    if query_start is None or query_end is None or query_start >= query_end:
+        return True
+
+    related = df[
+        (df["resource_type"] == resource_type)
+        & (df["resource_name"] == resource_name)
+        & (df["booking_date"] == to_date_text(booking_date_value))
+    ]
+
+    for _, row in related.iterrows():
+        row_start = parse_booking_datetime(
+            row["booking_date"],
+            row["start_time"]
+        )
+
+        row_end = parse_booking_datetime(
+            row["booking_date"],
+            row["end_time"]
+        )
+
+        if row_start and row_end and is_overlap(
+            query_start,
+            query_end,
+            row_start,
+            row_end
+        ):
+            return True
+
+    return False
+
+def get_conflict_booking(
+    resource_type,
+    resource_name,
+    booking_date_value,
+    start_time,
+    end_time
+):
+    query_start = parse_booking_datetime(
+        booking_date_value,
+        start_time
+    )
+
+    query_end = parse_booking_datetime(
+        booking_date_value,
+        end_time
+    )
+
+    if query_start is None or query_end is None or query_start >= query_end:
+        return None
+
+    related = df[
+        (df["resource_type"] == resource_type)
+        & (df["resource_name"] == resource_name)
+        & (df["booking_date"] == to_date_text(booking_date_value))
+    ]
+
+    for _, row in related.iterrows():
+        row_start = parse_booking_datetime(
+            row["booking_date"],
+            row["start_time"]
+        )
+
+        row_end = parse_booking_datetime(
+            row["booking_date"],
+            row["end_time"]
+        )
+
+        if row_start and row_end and is_overlap(
+            query_start,
+            query_end,
+            row_start,
+            row_end
+        ):
+            return row
+
+    return None
 
 def auto_release_expired_unchecked_bookings(dataframe: pd.DataFrame) -> tuple[pd.DataFrame, int]:
     """
