@@ -1,5 +1,0 @@
-streamlit
-pandas
-streamlit-gsheets
-requests
-urllib3
