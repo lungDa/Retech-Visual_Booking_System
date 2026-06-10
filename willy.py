@@ -41,8 +41,8 @@ components.html(
     height=0,
 )
 
-st.title("鋒霈環境科技股份有限公司")
-st.caption("台中分公司雲端同步視覺化預約系統")
+st.title("鋒霈環境科技股份有限公司_台中分公司")
+st.caption("雲端同步視覺化預約系統")
 
 WORKSHEET_NAME = "Tasks"
 
