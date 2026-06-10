@@ -610,26 +610,23 @@ def auto_release_expired_unchecked_bookings(dataframe: pd.DataFrame) -> tuple[pd
     return normalize_df(result), released_count
 
 
-def has_booking_conflict(
-    resource_type: str,
-    resource_name: str,
+def get_conflict_booking(
+    resource_type,
+    resource_name,
     booking_date_value,
-    start_time: str,
-    end_time: str,
-) -> bool:
-    try:
-        day_value = booking_date_value if isinstance(booking_date_value, date) else pd.to_datetime(booking_date_value).date()
-    except Exception:
-        return True
+    start_time,
+    end_time
+):
 
-    if is_closed_day(day_value):
-        return True
+    query_start = parse_booking_datetime(
+        booking_date_value,
+        start_time
+    )
 
-    query_start = parse_booking_datetime(booking_date_value, start_time)
-    query_end = parse_booking_datetime(booking_date_value, end_time)
-
-    if query_start is None or query_end is None or query_start >= query_end:
-        return True
+    query_end = parse_booking_datetime(
+        booking_date_value,
+        end_time
+    )
 
     related = df[
         (df["resource_type"] == resource_type)
@@ -638,13 +635,28 @@ def has_booking_conflict(
     ]
 
     for _, row in related.iterrows():
-        row_start = parse_booking_datetime(row["booking_date"], row["start_time"])
-        row_end = parse_booking_datetime(row["booking_date"], row["end_time"])
 
-        if row_start and row_end and is_overlap(query_start, query_end, row_start, row_end):
-            return True
+        row_start = parse_booking_datetime(
+            row["booking_date"],
+            row["start_time"]
+        )
 
-    return False
+        row_end = parse_booking_datetime(
+            row["booking_date"],
+            row["end_time"]
+        )
+
+        if row_start and row_end:
+
+            if is_overlap(
+                query_start,
+                query_end,
+                row_start,
+                row_end
+            ):
+                return row
+
+    return None
 
 
 def available_resources(resource_type: str, booking_date_value, start_time: str, end_time: str) -> list[str]:
@@ -879,8 +891,29 @@ def render_booking_form(resource_type: str) -> None:
         st.warning("請輸入預約人")
         return
 
-    if has_booking_conflict(resource_type, resource_name, booking_date_value, start_time, end_time):
-        st.error(f"{resource_name} 在 {booking_date_value} {start_time}~{end_time} 已有預約，請改選其他時段。")
+    conflict = get_conflict_booking(
+    resource_type,
+    resource_name,
+    booking_date_value,
+    start_time,
+    end_time
+    )
+
+    if conflict is not None:
+    
+        st.error(
+            f"""
+    ⚠️ 該時間已有預約！
+    
+    資源：{resource_name}
+    
+    預約人：{conflict['applicant']}
+    
+    時間：
+    {conflict['start_time']} ~ {conflict['end_time']}
+    """
+        )
+    
         return
 
     new_row = {
@@ -910,6 +943,52 @@ def render_booking_form(resource_type: str) -> None:
         safe_rerun()
 
 
+def get_conflict_booking(
+    resource_type,
+    resource_name,
+    booking_date_value,
+    start_time,
+    end_time
+):
+    query_start = parse_booking_datetime(
+        booking_date_value,
+        start_time
+    )
+
+    query_end = parse_booking_datetime(
+        booking_date_value,
+        end_time
+    )
+
+    related = df[
+        (df["resource_type"] == resource_type)
+        & (df["resource_name"] == resource_name)
+        & (df["booking_date"] == to_date_text(booking_date_value))
+    ]
+
+    for _, row in related.iterrows():
+
+        row_start = parse_booking_datetime(
+            row["booking_date"],
+            row["start_time"]
+        )
+
+        row_end = parse_booking_datetime(
+            row["booking_date"],
+            row["end_time"]
+        )
+
+        if row_start and row_end:
+
+            if is_overlap(
+                query_start,
+                query_end,
+                row_start,
+                row_end
+            ):
+                return row
+
+    return None
 def render_calendar(resource_type: str) -> None:
     st.write(f"### {resource_type}月曆")
 
