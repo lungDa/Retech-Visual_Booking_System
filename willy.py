@@ -1357,7 +1357,7 @@ def render_calendar(resource_type: str) -> None:
 def render_booking_table(resource_type: str) -> None:
     st.write(f"### {resource_type}預約紀錄 / 簽到管理")
 
-    sub_df = df[df["resource_type"] == resource_type].copy()
+    sub_df = df[(df["resource_type"] == resource_type) & (~df["status"].isin(["已取消", "已結束", "已失效"]))].copy()
 
     if sub_df.empty:
         st.info(f"目前沒有{resource_type}預約紀錄。")
