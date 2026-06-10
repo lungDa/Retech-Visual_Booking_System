@@ -95,6 +95,9 @@ STATUS_BORDER = {
     "已預約": "#e74c3c",
 }
 
+def is_closed_status(status) -> bool:
+    return normalize_status(status) in ["已取消", "已結束", "已失效"]
+
 TIME_OPTIONS = [
     "08:00", "08:30", "09:00", "09:30", "10:00", "10:30",
     "11:00", "11:30", "12:00", "12:30", "13:00", "13:30",
@@ -1310,16 +1313,30 @@ def render_calendar(resource_type: str) -> None:
                 if not row_start or not row_end:
                     continue
             
-                booking_lines += (
-                    f'<div class="slot-pill" '
-                    f'style="background:{status_color(row_status)}; '
-                    f'border-color:{status_border(row_status)}; '
-                    f'display:block; width:100%; box-sizing:border-box; '
-                    f'white-space:normal;">'
-                    f'{status_icon(row_status)} {row_start}-{row_end}'
-                    f'<br><span style="font-size:11px; color:#555;">{applicant}</span>'
-                    f'</div>'
-                )
+                if is_closed_status(row_status):
+                    booking_lines += (
+                        f'<div class="slot-pill" '
+                        f'style="background:#eeeeee; '
+                        f'border-color:#999; '
+                        f'color:#888; '
+                        f'text-decoration:line-through; '
+                        f'display:block; width:100%; box-sizing:border-box; '
+                        f'white-space:normal;">'
+                        f'{row_start}-{row_end}'
+                        f'<br><span style="font-size:11px;">{applicant}</span>'
+                        f'</div>'
+                    )
+                else:
+                    booking_lines += (
+                        f'<div class="slot-pill" '
+                        f'style="background:{status_color(row_status)}; '
+                        f'border-color:{status_border(row_status)}; '
+                        f'display:block; width:100%; box-sizing:border-box; '
+                        f'white-space:normal;">'
+                        f'{status_icon(row_status)} {row_start}-{row_end}'
+                        f'<br><span style="font-size:11px; color:#555;">{applicant}</span>'
+                        f'</div>'
+                    )
 
                 if not booking_lines:
                     booking_lines = (
@@ -1351,30 +1368,35 @@ def render_booking_table(resource_type: str) -> None:
     for _, row in sub_df.iterrows():
         row_id = str(row["id"])
 
+        is_deleted_style = is_closed_status(row["status"])
         with st.container(border=True):
             c1, c2, c3, c4 = st.columns([2, 2, 2, 2])
 
+            
+###########################################################################################################################################################
             with c1:
-                is_deleted_style = row["status"] in ["已取消", "已結束", "已失效"]
-
                 if is_deleted_style:
-                    st.markdown(
-                        f"~~**{row['resource_name']}**~~"
-                    )
-                    st.caption(
-                        f"~~{row['booking_date']} {row['start_time']}~{row['end_time']}~~"
-                    )
+                    st.markdown(f"<span style='color:#888;'>~~**{row['resource_name']}**~~</span>", unsafe_allow_html=True)
+                    st.markdown(f"<span style='color:#888;'>~~{row['booking_date']} {row['start_time']}~{row['end_time']}~~</span>", unsafe_allow_html=True)
                 else:
                     st.markdown(f"**{row['resource_name']}**")
                     st.caption(f"{row['booking_date']} {row['start_time']}~{row['end_time']}")
-
+            
             with c2:
-                st.write(f"預約人：{row['applicant']}")
-                st.write(f"用途：{row['purpose'] if row['purpose'] else '未填寫'}")
-
+                if is_deleted_style:
+                    st.markdown(f"<span style='color:#888;'>~~預約人：{row['applicant']}~~</span>", unsafe_allow_html=True)
+                    st.markdown(f"<span style='color:#888;'>~~用途：{row['purpose'] if row['purpose'] else '未填寫'}~~</span>", unsafe_allow_html=True)
+                else:
+                    st.write(f"預約人：{row['applicant']}")
+                    st.write(f"用途：{row['purpose'] if row['purpose'] else '未填寫'}")
+            
             with c3:
-                st.write(f"狀態：{status_icon(row['status'])} {normalize_status(row['status'])}")
-                st.write(f"簽到：{row['checkin']}")
+                if is_deleted_style:
+                    st.markdown(f"<span style='color:#888;'>~~狀態：{normalize_status(row['status'])}~~</span>", unsafe_allow_html=True)
+                    st.markdown(f"<span style='color:#888;'>~~簽到：{row['checkin']}~~</span>", unsafe_allow_html=True)
+                else:
+                    st.write(f"狀態：{status_icon(row['status'])} {normalize_status(row['status'])}")
+                    st.write(f"簽到：{row['checkin']}")
 
             with c4:
                 if row["checkin"] == "未簽到":
